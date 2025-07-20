@@ -34,8 +34,8 @@ Resolution -> location -> mouse -> plane -> index (same as DICOM structure)
 ## Used slice ID format:
 ID: MMLPXXR <br>
 -> MM: Patient ID <br>
--> L: Location     H = HEAD-THORAX; T = THORAX-ABDOMEN <br> <- ?
--> P: Plane        C = Coronal; S = Sagittal; T = Transax <br> <- ?
+-> L: Location     H = HEAD-THORAX; T = THORAX-ABDOMEN <- ? <br>
+-> P: Plane        C = Coronal; S = Sagittal; T = Transax <- ? <br>
 -> XX: Slice ID <br>
 -> R: Resoulution  H = HIGH RES; L = LOW RES <br>
 <br>
