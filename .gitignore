@@ -1,8 +1,5 @@
 APDDPM.code-workspace
 DATA
 DATA-TEMP
-
-# Ignore everything in Testing:
-Testing/*
-# Except:
-!Testing/visualizer.py
+.vscode
+Testing
