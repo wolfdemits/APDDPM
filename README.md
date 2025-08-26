@@ -14,14 +14,14 @@ Imaging.
     (|_ Residual_stats.json)
 |_ PRE-PROCESSING
     |_ datamanager.py
-    |_ convert_to_zarr.py
+    |_ convert-to-zarr.py
 |_ ML-MODEL
     |_ ... 
 |_ Testing
     |_ visualizer.py (uses ./PRE-PROCESSING/datamanager.py)
 </pre>
 
-data.json: -> contains info about tracers and patient IDs, used by filemanager
+data.json: -> contains info about tracers and patient IDs, used by filemanager <br>
 info.json: -> stores info about specific acquisition of patient. I.e.: WB/BR study, tracer, voxel size, time point, TOF resolution, ... 
 
 **Use Visualizer.py to inspect images**
