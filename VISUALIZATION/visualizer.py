@@ -116,6 +116,8 @@ def soft_refresh():
 
     
     # update slider and division info
+    slider1_label_value.configure(text=f'div{divisions[view1_div]}')
+    slider2_label_value.configure(text=f'div{divisions[view2_div]}')
     slider1.configure(to=0, from_=(len(divisions) - 1), number_of_steps=len(divisions))
     slider2.configure(to=0, from_=(len(divisions) - 1), number_of_steps=len(divisions))
 
@@ -294,24 +296,16 @@ def slider1_callback(value):
     int_value = int(round(value))
     slider1.set(int_value)
 
-    if divisions is None:
-        return
-    
     global view1_div
     view1_div = int_value
-    slider1_label_value.configure(text=f'div{divisions[view1_div]}')
     soft_refresh()
 
 def slider2_callback(value):
     int_value = int(round(value))
     slider2.set(int_value)
 
-    if divisions is None:
-        return
-    
     global view2_div
     view2_div = int_value
-    slider2_label_value.configure(text=f'div{divisions[view2_div]}')
     soft_refresh()
 
 ## GUI Element definitions ###############################################
@@ -390,9 +384,10 @@ slider2 = customtkinter.CTkSlider(master=root, from_=6, to=0, command=slider2_ca
 slider2.place(relx=0.95, rely=0.21, relheight=0.32)
 slider2.set(0)
 slider2_label_value = customtkinter.CTkLabel(text='', master=root, fg_color="transparent", text_color="#5ab098", font=(None,16))
-slider2_label_value.place(relx=0.93, rely=0.54)
+slider2_label_value.place(relx=0.94, rely=0.54)
 
 # info labels
+
 
 ##########################################################################
 

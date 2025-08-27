@@ -18,7 +18,7 @@ Imaging.
 |_ ML-MODEL
     |_ ... 
 |_ VISUALIZATION
-    |_ visualizer.py (uses ./PRE-PROCESSING/datamanager.py)
+    |_ visualizer.py (uses ./PREPROCESSING/datamanager.py)
 </pre>
 
 data.json: -> contains info about tracers and patient IDs, used by filemanager <br>
