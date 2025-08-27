@@ -157,15 +157,27 @@ def soft_refresh():
     slice_1_label.configure(text=f'{slice_idx_1}/{available_slices_1 - 1}')
     slice_2_label.configure(text=f'{slice_idx_2}/{available_slices_2 - 1}')
 
+    max_label_val_1.configure(text=np.max(img1_arr))
+    mean_label_val_1.configure(text=np.mean(img1_arr))
+    min_label_val_1.configure(text=np.min(img1_arr))
+    std_label_val_1.configure(text=np.std(img1_arr))
+
+    max_label_val_2.configure(text=np.max(img2_arr))
+    mean_label_val_2.configure(text=np.mean(img2_arr))
+    min_label_val_2.configure(text=np.min(img2_arr))
+    std_label_val_2.configure(text=np.std(img2_arr))
+
     #### image rendering ###############
+    vmax = max(np.max(img1_arr), np.max(img2_arr))
+
     fig_img1, ax_img1 = plt.subplots(figsize=(5, 5))
-    ax_img1.imshow(img1_arr) #, cmap="gray")
+    ax_img1.imshow(img1_arr, vmin=0, vmax=vmax, cmap="gray_r")
     fig_img1.patch.set_facecolor('#242424ff')
     ax_img1.axis("off")
     fig_img1.subplots_adjust(left=0, right=1, top=1, bottom=0)
 
     fig_img2, ax_img2 = plt.subplots(figsize=(5, 5))
-    ax_img2.imshow(img2_arr) #, cmap="gray")
+    ax_img2.imshow(img2_arr, vmin=0, vmax=vmax, cmap="gray_r")
     fig_img2.patch.set_facecolor('#242424ff')
     ax_img2.axis("off")
     fig_img2.subplots_adjust(left=0, right=1, top=1, bottom=0)
@@ -386,8 +398,40 @@ slider2.set(0)
 slider2_label_value = customtkinter.CTkLabel(text='', master=root, fg_color="transparent", text_color="#5ab098", font=(None,16))
 slider2_label_value.place(relx=0.94, rely=0.54)
 
-# info labels
+# info labels min, max, mean stdev
+max_label_1 = customtkinter.CTkLabel(text="Max SUV: ", master=root, text_color='#366abf', font=(None,15))
+max_label_1.place(relx=0.20, rely=0.74)
+max_label_val_1 = customtkinter.CTkLabel(text="", master=root, text_color="#d4661e", font=(None,15))
+max_label_val_1.place(relx=0.30, rely=0.74)
+mean_label_1 = customtkinter.CTkLabel(text="Mean SUV: ", master=root, text_color='#366abf', font=(None,15))
+mean_label_1.place(relx=0.20, rely=0.78)
+mean_label_val_1 = customtkinter.CTkLabel(text="", master=root, text_color="#d4661e", font=(None,15))
+mean_label_val_1.place(relx=0.30, rely=0.78)
+min_label_1 = customtkinter.CTkLabel(text="Min SUV: ", master=root, text_color='#366abf', font=(None,15))
+min_label_1.place(relx=0.20, rely=0.82)
+min_label_val_1 = customtkinter.CTkLabel(text="", master=root, text_color="#d4661e", font=(None,15))
+min_label_val_1.place(relx=0.30, rely=0.82)
+std_label_1 = customtkinter.CTkLabel(text="St. Dev. SUV: ", master=root, text_color='#366abf', font=(None,15))
+std_label_1.place(relx=0.20, rely=0.86)
+std_label_val_1 = customtkinter.CTkLabel(text="", master=root, text_color="#d4661e", font=(None,15))
+std_label_val_1.place(relx=0.30, rely=0.86)
 
+max_label_2 = customtkinter.CTkLabel(text="Max SUV: ", master=root, text_color='#366abf', font=(None,15))
+max_label_2.place(relx=0.63, rely=0.74)
+max_label_val_2 = customtkinter.CTkLabel(text="", master=root, text_color="#d4661e", font=(None,15))
+max_label_val_2.place(relx=0.73, rely=0.74)
+mean_label_2 = customtkinter.CTkLabel(text="Mean SUV: ", master=root, text_color='#366abf', font=(None,15))
+mean_label_2.place(relx=0.63, rely=0.78)
+mean_label_val_2 = customtkinter.CTkLabel(text="", master=root, text_color="#d4661e", font=(None,15))
+mean_label_val_2.place(relx=0.73, rely=0.78)
+min_label_2= customtkinter.CTkLabel(text="Min SUV: ", master=root, text_color='#366abf', font=(None,15))
+min_label_2.place(relx=0.63, rely=0.82)
+min_label_val_2 = customtkinter.CTkLabel(text="", master=root, text_color="#d4661e", font=(None,15))
+min_label_val_2.place(relx=0.73, rely=0.82)
+std_label_2 = customtkinter.CTkLabel(text="St. Dev. SUV: ", master=root, text_color='#366abf', font=(None,15))
+std_label_2.place(relx=0.63, rely=0.86)
+std_label_val_2 = customtkinter.CTkLabel(text="", master=root, text_color="#d4661e", font=(None,15))
+std_label_val_2.place(relx=0.73, rely=0.86)
 
 ##########################################################################
 
