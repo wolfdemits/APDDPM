@@ -73,7 +73,7 @@ class Datamanager:
         for i, div in enumerate(divisions):
             self.scan[i] = self.root[patient_id]['div' + str(div)]
 
-        print(f'Size in memory of scan: {round(self.scan.nbytes / 1024 / 1024,2)} MB')
+        # print(f'Size in memory of scan: {round(self.scan.nbytes / 1024 / 1024,2)} MB')
         
         return self.scan, divisions
 
