@@ -9,7 +9,9 @@ import threading
 import tkinter
 import customtkinter
 from matplotlib.backends.backend_agg import FigureCanvasAgg
-matplotlib.use('agg')
+matplotlib.use('Qt5Agg')
+
+import hyperspy.api as hyperspy
 
 from PREPROCESSING.datamanager import Datamanager
 
@@ -26,6 +28,7 @@ customtkinter.set_default_color_theme("dark-blue")
 # global variable init
 scan = None
 divisions = None
+sphere_roi = None
 worker_thread = None
 available_slices_1 = 0
 available_slices_2 = 0
@@ -106,20 +109,17 @@ def refresh_screen():
 
     start_task()
 
-def soft_refresh():
+def slice_scan(div1=None, div2=None):
     global view1_ori
     global view2_ori
-    global scan, divisions
-    global available_slices_1, available_slices_2
     global slice_idx_1, slice_idx_2
     global view1_div, view2_div
 
-    
-    # update slider and division info
-    slider1_label_value.configure(text=f'div{divisions[view1_div]}')
-    slider2_label_value.configure(text=f'div{divisions[view2_div]}')
-    slider1.configure(to=0, from_=(len(divisions) - 1), number_of_steps=len(divisions))
-    slider2.configure(to=0, from_=(len(divisions) - 1), number_of_steps=len(divisions))
+    if not div1 is None:
+        view1_div = div1
+
+    if not div2 is None:
+        view2_div = div2
 
     if view1_ori.get() == 'Transaxial':
         available_slices_1 = scan[view1_div].shape[0]
@@ -153,6 +153,24 @@ def soft_refresh():
             slice_idx_2 = available_slices_2 // 2
         img2_arr = scan[view2_div][:, :, slice_idx_2]
 
+    return img1_arr, img2_arr
+
+def soft_refresh():
+    global scan, divisions
+    global sphere_roi
+    global available_slices_1, available_slices_2
+    global slice_idx_1, slice_idx_2
+    global view1_div, view2_div
+    
+    # update slider and division info
+    slider1_label_value.configure(text=f'div{divisions[view1_div]}')
+    slider2_label_value.configure(text=f'div{divisions[view2_div]}')
+    slider1.configure(to=0, from_=(len(divisions) - 1), number_of_steps=len(divisions))
+    slider2.configure(to=0, from_=(len(divisions) - 1), number_of_steps=len(divisions))
+
+    # slice scan
+    img1_arr, img2_arr = slice_scan()
+
     # set slice info
     slice_1_label.configure(text=f'{slice_idx_1}/{available_slices_1 - 1}')
     slice_2_label.configure(text=f'{slice_idx_2}/{available_slices_2 - 1}')
@@ -166,6 +184,11 @@ def soft_refresh():
     mean_label_val_2.configure(text=np.mean(img2_arr))
     min_label_val_2.configure(text=np.min(img2_arr))
     std_label_val_2.configure(text=np.std(img2_arr))
+
+    # ROI info update
+    if not sphere_roi is None:
+        ## TODO: compute + display ROI info
+        print(sphere_roi)
 
     #### image rendering ###############
     vmax = max(np.max(img1_arr), np.max(img2_arr))
@@ -181,6 +204,9 @@ def soft_refresh():
     fig_img2.patch.set_facecolor('#242424ff')
     ax_img2.axis("off")
     fig_img2.subplots_adjust(left=0, right=1, top=1, bottom=0)
+
+    # Add ROI coordinate
+    ## TODO: display ROI
 
     # Convert Matplotlib figure to a PIL image
     pil_img1 = fig_to_pil(fig_img1)
@@ -320,6 +346,56 @@ def slider2_callback(value):
     view2_div = int_value
     soft_refresh()
 
+# ROI selector button logic
+def open_ROI_gui():
+    global scan
+    global sphere_roi
+    if scan is None:
+        return
+
+    # get current slices
+    img1_arr, _ = slice_scan(div1=0)
+
+    # create plot for interactive gui
+    vmax = float(np.max(img1_arr))
+    im = hyperspy.signals.Signal2D(img1_arr)
+    im.plot(vmin=0, vmax=vmax, cmap='gray_r', colorbar=False)
+
+    ax = plt.gca()
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+    ax.set_title("Select spherical ROI")
+
+    # set button disabled
+    ROI_button.configure(state='disabled')
+
+    # Open interactive selection window
+    # Note: the ROI is controlled and displayed as circular, but the analysis will be done on a spherical ROI!
+    roi = hyperspy.roi.CircleROI(cx=150, cy=150, r=10, r_inner=5)
+    roi_interactive = roi.interactive(im, color="blue")
+    plt.draw()
+    details = roi.gui()
+    plt.show()
+
+    # save ROI coords
+    if roi.is_valid():
+        sphere_roi = roi
+    else:
+        print('Invalid ROI')
+        sphere_roi = None
+
+    # set button active
+    ROI_button.configure(state='normal')
+
+    # cleanup
+    del roi_interactive
+    del details
+
+    # rerender screen to include ROI in images
+    soft_refresh()
+
+    return
+
 ## GUI Element definitions ###############################################
 
 # Tracer dropdown
@@ -400,38 +476,48 @@ slider2_label_value.place(relx=0.94, rely=0.54)
 
 # info labels min, max, mean stdev
 max_label_1 = customtkinter.CTkLabel(text="Max SUV: ", master=root, text_color='#366abf', font=(None,15))
-max_label_1.place(relx=0.20, rely=0.74)
+max_label_1.place(relx=0.10, rely=0.74)
 max_label_val_1 = customtkinter.CTkLabel(text="", master=root, text_color="#d4661e", font=(None,15))
-max_label_val_1.place(relx=0.30, rely=0.74)
+max_label_val_1.place(relx=0.20, rely=0.74)
 mean_label_1 = customtkinter.CTkLabel(text="Mean SUV: ", master=root, text_color='#366abf', font=(None,15))
-mean_label_1.place(relx=0.20, rely=0.78)
+mean_label_1.place(relx=0.10, rely=0.78)
 mean_label_val_1 = customtkinter.CTkLabel(text="", master=root, text_color="#d4661e", font=(None,15))
-mean_label_val_1.place(relx=0.30, rely=0.78)
+mean_label_val_1.place(relx=0.20, rely=0.78)
 min_label_1 = customtkinter.CTkLabel(text="Min SUV: ", master=root, text_color='#366abf', font=(None,15))
-min_label_1.place(relx=0.20, rely=0.82)
+min_label_1.place(relx=0.30, rely=0.74)
 min_label_val_1 = customtkinter.CTkLabel(text="", master=root, text_color="#d4661e", font=(None,15))
-min_label_val_1.place(relx=0.30, rely=0.82)
+min_label_val_1.place(relx=0.40, rely=0.74)
 std_label_1 = customtkinter.CTkLabel(text="St. Dev. SUV: ", master=root, text_color='#366abf', font=(None,15))
-std_label_1.place(relx=0.20, rely=0.86)
+std_label_1.place(relx=0.30, rely=0.78)
 std_label_val_1 = customtkinter.CTkLabel(text="", master=root, text_color="#d4661e", font=(None,15))
-std_label_val_1.place(relx=0.30, rely=0.86)
+std_label_val_1.place(relx=0.40, rely=0.78)
 
 max_label_2 = customtkinter.CTkLabel(text="Max SUV: ", master=root, text_color='#366abf', font=(None,15))
-max_label_2.place(relx=0.63, rely=0.74)
+max_label_2.place(relx=0.54, rely=0.74)
 max_label_val_2 = customtkinter.CTkLabel(text="", master=root, text_color="#d4661e", font=(None,15))
-max_label_val_2.place(relx=0.73, rely=0.74)
+max_label_val_2.place(relx=0.64, rely=0.74)
 mean_label_2 = customtkinter.CTkLabel(text="Mean SUV: ", master=root, text_color='#366abf', font=(None,15))
-mean_label_2.place(relx=0.63, rely=0.78)
+mean_label_2.place(relx=0.54, rely=0.78)
 mean_label_val_2 = customtkinter.CTkLabel(text="", master=root, text_color="#d4661e", font=(None,15))
-mean_label_val_2.place(relx=0.73, rely=0.78)
+mean_label_val_2.place(relx=0.64, rely=0.78)
 min_label_2= customtkinter.CTkLabel(text="Min SUV: ", master=root, text_color='#366abf', font=(None,15))
-min_label_2.place(relx=0.63, rely=0.82)
+min_label_2.place(relx=0.74, rely=0.74)
 min_label_val_2 = customtkinter.CTkLabel(text="", master=root, text_color="#d4661e", font=(None,15))
-min_label_val_2.place(relx=0.73, rely=0.82)
+min_label_val_2.place(relx=0.84, rely=0.74)
 std_label_2 = customtkinter.CTkLabel(text="St. Dev. SUV: ", master=root, text_color='#366abf', font=(None,15))
-std_label_2.place(relx=0.63, rely=0.86)
+std_label_2.place(relx=0.74, rely=0.78)
 std_label_val_2 = customtkinter.CTkLabel(text="", master=root, text_color="#d4661e", font=(None,15))
-std_label_val_2.place(relx=0.73, rely=0.86)
+std_label_val_2.place(relx=0.84, rely=0.78)
+
+# ROI button
+patient_label = customtkinter.CTkLabel(text="ROI analysis", master=root, text_color='#c92477', font=(None,18))
+patient_label.place(relx = 0.45, rely=0.83)
+
+ROI_button = customtkinter.CTkButton(text="Select ROI", master=root, corner_radius=5, command=lambda: open_ROI_gui())
+ROI_button.place(relx=0.50, rely=0.97, relwidth=0.1, anchor=tkinter.CENTER)
+
+# ROI info
+## TODO: ROI info elements
 
 ##########################################################################
 
