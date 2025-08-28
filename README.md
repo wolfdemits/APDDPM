@@ -19,6 +19,8 @@ Imaging.
     |_ ... 
 |_ VISUALIZATION
     |_ visualizer.py (uses ./PREPROCESSING/datamanager.py)
+|_ ANALYSIS
+    |_ sphericalVOI_analysis.py
 </pre>
 
 data.json: -> contains info about tracers and patient IDs, used by filemanager <br>

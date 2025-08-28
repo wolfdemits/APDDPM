@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
+from matplotlib.patches import Circle
 import pathlib
 from PIL import Image
 
@@ -14,6 +15,7 @@ matplotlib.use('Qt5Agg')
 import hyperspy.api as hyperspy
 
 from PREPROCESSING.datamanager import Datamanager
+from ANALYSIS.sphericalVOI_analysis import voi_sph_sub
 
 DATAPATH = pathlib.Path('./DATA')
 
@@ -25,10 +27,19 @@ root = customtkinter.CTk()
 customtkinter.set_appearance_mode("dark")
 customtkinter.set_default_color_theme("dark-blue")
 
+class AttrDict(dict):
+    def __getattr__(self, key):
+        return self[key]
+
+    def __setattr__(self, key, value):
+        self[key] = value
+
 # global variable init
 scan = None
 divisions = None
 sphere_roi = None
+mean_roi = None
+std_roi = None
 worker_thread = None
 available_slices_1 = 0
 available_slices_2 = 0
@@ -110,10 +121,9 @@ def refresh_screen():
     start_task()
 
 def slice_scan(div1=None, div2=None):
-    global view1_ori
-    global view2_ori
     global slice_idx_1, slice_idx_2
     global view1_div, view2_div
+    global available_slices_1, available_slices_2
 
     if not div1 is None:
         view1_div = div1
@@ -125,12 +135,12 @@ def slice_scan(div1=None, div2=None):
         available_slices_1 = scan[view1_div].shape[0]
         if slice_idx_1 is None:
             slice_idx_1 = available_slices_1 // 2
-        img1_arr = scan[view1_div][slice_idx_1]
-    elif view1_ori.get() == 'Saggital':
+        img1_arr = scan[view1_div][slice_idx_1,:,:]
+    elif view1_ori.get() == 'Coronal':
         available_slices_1 = scan[view1_div].shape[1]
         if slice_idx_1 is None:
             slice_idx_1 = available_slices_1 // 2
-        img1_arr = scan[view1_div][:, slice_idx_1]
+        img1_arr = scan[view1_div][:, slice_idx_1, :]
     else:
         available_slices_1 = scan[view1_div].shape[2]
         if slice_idx_1 is None:
@@ -141,12 +151,12 @@ def slice_scan(div1=None, div2=None):
         available_slices_2 = scan[view2_div].shape[0]
         if slice_idx_2 is None:
             slice_idx_2 = available_slices_2 // 2
-        img2_arr = scan[view2_div][slice_idx_2]
-    elif view2_ori.get() == 'Saggital':
+        img2_arr = scan[view2_div][slice_idx_2,:,:]
+    elif view2_ori.get() == 'Coronal':
         available_slices_2 = scan[view2_div].shape[1]
         if slice_idx_2 is None:
             slice_idx_2 = available_slices_2 // 2
-        img2_arr = scan[view2_div][:, slice_idx_2]
+        img2_arr = scan[view2_div][:, slice_idx_2,:]
     else:
         available_slices_2 = scan[view2_div].shape[2]
         if slice_idx_2 is None:
@@ -157,7 +167,6 @@ def slice_scan(div1=None, div2=None):
 
 def soft_refresh():
     global scan, divisions
-    global sphere_roi
     global available_slices_1, available_slices_2
     global slice_idx_1, slice_idx_2
     global view1_div, view2_div
@@ -186,9 +195,12 @@ def soft_refresh():
     std_label_val_2.configure(text=np.std(img2_arr))
 
     # ROI info update
-    if not sphere_roi is None:
-        ## TODO: compute + display ROI info
-        print(sphere_roi)
+    if not (sphere_roi is None or mean_roi is None or std_roi is None):
+        mean_roi_val_1.configure(text=np.round(mean_roi[view1_div], 5))
+        std_roi_val_1.configure(text=np.round(std_roi[view1_div], 5))
+
+        mean_roi_val_2.configure(text=np.round(mean_roi[view2_div], 5))
+        std_roi_val_2.configure(text=np.round(std_roi[view2_div], 5))
 
     #### image rendering ###############
     vmax = max(np.max(img1_arr), np.max(img2_arr))
@@ -205,8 +217,76 @@ def soft_refresh():
     ax_img2.axis("off")
     fig_img2.subplots_adjust(left=0, right=1, top=1, bottom=0)
 
-    # Add ROI coordinate
-    ## TODO: display ROI
+    # Add ROI visually
+    if not (sphere_roi is None or sphere_roi.r == 0):
+        if view1_ori.get() == 'Transaxial':
+            # TRANSAXIAL: GLOBAL z=cte
+            # Coordinates: (x',y', slice_idx) = plot coordinates
+            # x = x'
+            # y = y'
+            # z = idx
+            h = abs(sphere_roi.z - slice_idx_1)
+            if not (h**2 >= sphere_roi.r**2):
+                r = float(np.sqrt(sphere_roi.r**2 - h**2))
+                circ = Circle((sphere_roi.x, sphere_roi.y), r, alpha=0.3, color='red')
+                ax_img1.add_patch(circ)
+        elif view1_ori.get() == 'Coronal':
+            # CORONAL: GLOBAL y=cte
+            # Coordinates: (x',y', slice_idx) = plot coordinates
+            # x = x'
+            # y = idx
+            # z = y'
+            h = abs(sphere_roi.y - slice_idx_1)
+            if not (h**2 >= sphere_roi.r**2):
+                r = float(np.sqrt(sphere_roi.r**2 - h**2))
+                circ = Circle((sphere_roi.x, sphere_roi.z), r, alpha=0.3, color='red')
+                ax_img1.add_patch(circ)
+        else:
+            # SAGITTAL: GLOBAL x=cte
+            # Coordinates: (x',y', slice_idx) = plot coordinates
+            # x = idx
+            # y = x'
+            # z = y'
+            h = abs(sphere_roi.x - slice_idx_1)
+            if not (h**2 >= sphere_roi.r**2):
+                r = float(np.sqrt(sphere_roi.r**2 - h**2))
+                circ = Circle((sphere_roi.y, sphere_roi.z), r, alpha=0.3, color='red')
+                ax_img1.add_patch(circ)
+
+        if view2_ori.get() == 'Transaxial':
+            # TRANSAXIAL: GLOBAL z=cte
+            # Coordinates: (x',y', slice_idx) = plot coordinates
+            # x = x'
+            # y = y'
+            # z = idx
+            h = abs(sphere_roi.z - slice_idx_2)
+            if not (h**2 >= sphere_roi.r**2):
+                r = float(np.sqrt(sphere_roi.r**2 - h**2))
+                circ = Circle((sphere_roi.x, sphere_roi.y), r, alpha=0.3, color='red')
+                ax_img2.add_patch(circ)
+
+        elif view2_ori.get() == 'Coronal':
+            # CORONAL: GLOBAL y=cte
+            # Coordinates: (x',y', slice_idx) = plot coordinates
+            # x = x'
+            # y = idx
+            # z = y'
+            h = abs(sphere_roi.y - slice_idx_2)
+            if not (h**2 >= sphere_roi.r**2):
+                r = float(np.sqrt(sphere_roi.r**2 - h**2))
+                circ = Circle((sphere_roi.x, sphere_roi.z), r, alpha=0.3, color='red')
+                ax_img2.add_patch(circ)
+        else:
+            # SAGITTAL: GLOBAL x=cte
+            # Coordinates: (x',y', slice_idx) = plot coordinates
+            # x = idx
+            # y = x'
+            # z = y'
+            h = abs(sphere_roi.x - slice_idx_2)
+            if not (h**2 >= sphere_roi.r**2):
+                r = float(np.sqrt(sphere_roi.r**2 - h**2))
+                circ = Circle((sphere_roi.y, sphere_roi.z), r, alpha=0.3, color='red')
+                ax_img2.add_patch(circ)
 
     # Convert Matplotlib figure to a PIL image
     pil_img1 = fig_to_pil(fig_img1)
@@ -346,6 +426,21 @@ def slider2_callback(value):
     view2_div = int_value
     soft_refresh()
 
+def compute_stats_ROI():
+    global mean_roi
+    global std_roi
+
+    if sphere_roi is None or sphere_roi.r == 0:
+        return
+
+    mean_roi = np.zeros((len(divisions)))
+    std_roi = np.zeros((len(divisions)))
+
+    for i in range(len(divisions)):
+        mean_roi[i], std_roi[i] = voi_sph_sub(scan[i], sphere_roi.x, sphere_roi.y, sphere_roi.z, sphere_roi.r, 0)
+
+    return
+
 # ROI selector button logic
 def open_ROI_gui():
     global scan
@@ -371,7 +466,7 @@ def open_ROI_gui():
 
     # Open interactive selection window
     # Note: the ROI is controlled and displayed as circular, but the analysis will be done on a spherical ROI!
-    roi = hyperspy.roi.CircleROI(cx=150, cy=150, r=10, r_inner=5)
+    roi = hyperspy.roi.CircleROI(cx=img1_arr.shape[1]//2, cy=img1_arr.shape[0]//2, r=10)
     roi_interactive = roi.interactive(im, color="blue")
     plt.draw()
     details = roi.gui()
@@ -379,7 +474,45 @@ def open_ROI_gui():
 
     # save ROI coords
     if roi.is_valid():
-        sphere_roi = roi
+        #########################################################################
+        #
+        # Global coordinate system used: arr = [z,y,x]
+        # z: 0 -> 712 = Head -> Toe
+        # y: 0 -> 300 = Ventral -> Dorsal
+        # x: 0 -> 300 = Anatomical Left -> Anatomical Right
+        #
+        #########################################################################
+        sphere_roi = AttrDict({ 'x':0, 'y':0, 'z':0, 'r':0 })
+        if view1_ori.get() == 'Transaxial':
+            # TRANSAXIAL: GLOBAL z=cte
+            # Coordinates: (x',y', slice_idx) = plot coordinates
+            # x = x'
+            # y = y'
+            # z = idx
+            sphere_roi.x = int(roi.cx)
+            sphere_roi.y = int(roi.cy)
+            sphere_roi.z = slice_idx_1
+            sphere_roi.r = roi.r
+        elif view1_ori.get() == 'Coronal':
+            # CORONAL: GLOBAL y=cte
+            # Coordinates: (x',y', slice_idx) = plot coordinates
+            # x = x'
+            # y = idx
+            # z = y'
+            sphere_roi.x = int(roi.cx)
+            sphere_roi.y = slice_idx_1
+            sphere_roi.z = int(roi.cy)
+            sphere_roi.r = roi.r
+        else:
+            # SAGITTAL: GLOBAL x=cte
+            # Coordinates: (x',y', slice_idx) = plot coordinates
+            # x = idx
+            # y = x'
+            # z = y'
+            sphere_roi.x = slice_idx_1
+            sphere_roi.y = int(roi.cx)
+            sphere_roi.z = int(roi.cy)
+            sphere_roi.r = roi.r
     else:
         print('Invalid ROI')
         sphere_roi = None
@@ -390,6 +523,8 @@ def open_ROI_gui():
     # cleanup
     del roi_interactive
     del details
+
+    compute_stats_ROI()
 
     # rerender screen to include ROI in images
     soft_refresh()
@@ -419,11 +554,11 @@ previous_patient_button.place(relx=0.70, rely=0.08, relwidth=0.05, anchor=tkinte
 
 # view dropdown
 view1_ori = customtkinter.StringVar(value='Transaxial')
-view1_ori_menu = customtkinter.CTkComboBox(root, values=['Transaxial', 'Saggital', 'Coronal'], command=view1_ori_callback, variable=view1_ori)
+view1_ori_menu = customtkinter.CTkComboBox(root, values=['Transaxial', 'Sagittal', 'Coronal'], command=view1_ori_callback, variable=view1_ori)
 view1_ori_menu.place(relx = 0.18, rely=0.13, relwidth=0.20)
 
 view2_ori = customtkinter.StringVar(value='Transaxial')
-view2_ori_menu = customtkinter.CTkComboBox(root, values=['Transaxial', 'Saggital', 'Coronal'], command=view2_ori_callback, variable=view2_ori)
+view2_ori_menu = customtkinter.CTkComboBox(root, values=['Transaxial', 'Sagittal', 'Coronal'], command=view2_ori_callback, variable=view2_ori)
 view2_ori_menu.place(relx = 0.62, rely=0.13, relwidth=0.20)
 
 # images
@@ -517,7 +652,23 @@ ROI_button = customtkinter.CTkButton(text="Select ROI", master=root, corner_radi
 ROI_button.place(relx=0.50, rely=0.97, relwidth=0.1, anchor=tkinter.CENTER)
 
 # ROI info
-## TODO: ROI info elements
+mean_roi_label_1 = customtkinter.CTkLabel(text="ROI mean SUV: ", master=root, text_color='#366abf', font=(None,15))
+mean_roi_label_1.place(relx=0.08, rely=0.88)
+mean_roi_val_1 = customtkinter.CTkLabel(text="", master=root, text_color="#d4661e", font=(None,15))
+mean_roi_val_1.place(relx=0.20, rely=0.88)
+std_roi_label_1 = customtkinter.CTkLabel(text="ROI St. Dev. SUV: ", master=root, text_color='#366abf', font=(None,15))
+std_roi_label_1.place(relx=0.27, rely=0.88)
+std_roi_val_1 = customtkinter.CTkLabel(text="", master=root, text_color="#d4661e", font=(None,15))
+std_roi_val_1.place(relx=0.40, rely=0.88)
+
+mean_roi_label_2 = customtkinter.CTkLabel(text="ROI mean SUV: ", master=root, text_color='#366abf', font=(None,15))
+mean_roi_label_2.place(relx=0.54, rely=0.88)
+mean_roi_val_2 = customtkinter.CTkLabel(text="", master=root, text_color="#d4661e", font=(None,15))
+mean_roi_val_2.place(relx=0.66, rely=0.88)
+std_roi_label_2 = customtkinter.CTkLabel(text="ROI St. Dev. SUV: ", master=root, text_color='#366abf', font=(None,15))
+std_roi_label_2.place(relx=0.73, rely=0.88)
+std_roi_val_2 = customtkinter.CTkLabel(text="", master=root, text_color="#d4661e", font=(None,15))
+std_roi_val_2.place(relx=0.86, rely=0.88)
 
 ##########################################################################
 
