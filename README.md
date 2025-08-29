@@ -19,6 +19,8 @@ Imaging.
     |_ ... 
 |_ VISUALIZATION
     |_ visualizer.py (uses ./PREPROCESSING/datamanager.py)
+    |_ plotting_functions.py
+    |_ plotting_script.py
 |_ ANALYSIS
     |_ sphericalVOI_analysis.py
 </pre>
