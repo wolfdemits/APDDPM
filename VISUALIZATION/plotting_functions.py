@@ -62,19 +62,21 @@ class PlotCoordinate:
         for a in self.ax:
             a.clear()
 
+        vmax = max(float(np.max(self.scan[:,y,:])), float(np.max(self.scan[z,:,:])), float(np.max(self.scan[:,:,x])))
+
         # coronal
-        self.ax[0].imshow(self.scan[:,y,:], cmap='gray_r')
+        self.ax[0].imshow(self.scan[:,y,:], cmap='gray_r', vmin=0, vmax=vmax)
         self.ax[0].set_title('Coronal', c='green')
         self.ax[0].axhline(z, linestyle='--', c='blue', alpha=0.2)
         self.ax[0].axvline(x, linestyle='--', c='red', alpha=0.2)
         # Sagittal
-        self.ax[1].imshow(self.scan[:,:,x], cmap='gray_r')
+        self.ax[1].imshow(self.scan[:,:,x], cmap='gray_r', vmin=0, vmax=vmax)
         self.ax[1].set_title('Sagittal', c='red')
         self.ax[1].axhline(z, linestyle='--', c='blue', alpha=0.2)
         self.ax[1].axvline(y, linestyle='--', c='green', alpha=0.2)
 
         # Transaxial
-        self.ax[2].imshow(self.scan[z,:,:], cmap='gray_r')
+        self.ax[2].imshow(self.scan[z,:,:], cmap='gray_r', vmin=0, vmax=vmax)
         self.ax[2].set_title('Transaxial', c='blue')
         self.ax[2].axhline(y, linestyle='--', c='green', alpha=0.2)
         self.ax[2].axvline(x, linestyle='--', c='red', alpha=0.2)
