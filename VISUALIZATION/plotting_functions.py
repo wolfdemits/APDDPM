@@ -1,4 +1,17 @@
 import matplotlib.pyplot as plt
+import numpy as np
+
+# utility class for colored print outputs
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
 class PlotCoordinate:
     def __init__(self, scan, coords):
@@ -16,7 +29,7 @@ class PlotCoordinate:
         -----------
         scan: 3D numpy array
             3D scan to display
-        coords: tuple as defined: (x,y,z)
+        coords: tuple as defined: (z,y,x)
             initial coordinate to plot
         
         Returns:
@@ -24,11 +37,15 @@ class PlotCoordinate:
         PlotCoordinate Object, calling plt.show() should display the interactive plot. 
 
         """
+        if coords[0] >= scan.shape[0] or coords[1] >= scan.shape[1] or coords[2] >= scan.shape[2]:
+            print(bcolors.FAIL + 'Invalid coordinates' + bcolors.ENDC)
+            return
+
         self.scan = scan
         self.coords = coords
 
         # init fig, ax
-        self.fig, self.ax = plt.subplots(1, 3, figsize=(15, 5))
+        self.fig, self.ax = plt.subplots(1, 3, figsize=(12, 5))
 
         # initial render
         self.render()
@@ -39,7 +56,7 @@ class PlotCoordinate:
         return
 
     def render(self):
-        x, y, z = self.coords
+        z, y, x = self.coords
 
         # clear previous ax
         for a in self.ax:
@@ -78,27 +95,68 @@ class PlotCoordinate:
             # x = x'
             # y = y
             # z = y'
-            self.coords = (x_, self.coords[1], y_)
+            self.coords = (y_, self.coords[1], x_)
         elif event.inaxes is self.ax[1]:
             # SAGITTAL
             # x = x
             # y = x'
             # z = y'
-            self.coords = (self.coords[0], x_, y_)
+            self.coords = (y_, x_, self.coords[2])
         elif event.inaxes is self.ax[2]:
             # TRANSAXIAL
             # x = x'
             # y = y'
             # z = z
-            self.coords = (x_, y_, self.coords[2])
+            self.coords = (self.coords[0], y_, x_)
         else:
             return
 
         self.render()
         return
 
-def plot_divisions(scans, plane, slice_idx):
-    # TODO
-    return
+def plot_divisions(scans, plane, slice_idx, divisions=None):
+    fig, axs = plt.subplots(1, scans.shape[0], figsize=(3*scans.shape[0], 5))
+
+    def slice_scan(scan, plane, slice_idx):
+        if not (plane == 'Transaxial' or plane == 'Coronal' or plane == 'Transaxial'):
+            print(bcolors.FAIL + 'Invalid plane name!' + bcolors.ENDC)
+            return
+        
+        if plane == 'Transaxial':
+            if slice_idx >= scan.shape[0]:
+                print(bcolors.FAIL + 'Invalid coordinates' + bcolors.ENDC)
+                return
+            img_arr = scan[slice_idx,:,:]
+        elif plane == 'Coronal':
+            if slice_idx >= scan.shape[1]:
+                print(bcolors.FAIL + 'Invalid coordinates' + bcolors.ENDC)
+                return
+            img_arr = scan[:, slice_idx, :]
+        else:
+            if slice_idx >= scan.shape[2]:
+                print(bcolors.FAIL + 'Invalid coordinates' + bcolors.ENDC)
+                return
+            img_arr = scan[:, :, slice_idx]
+
+        return img_arr
+    
+    vmax = 0
+
+    for i in range(scans.shape[0]):
+        arr = slice_scan(scans[i], plane, slice_idx)
+        if float(np.max(arr) > vmax):
+            vmax = np.max(arr)
+
+    for i in range(scans.shape[0]):
+        arr = slice_scan(scans[i], plane, slice_idx)
+        axs[i].imshow(arr, cmap='gray_r', vmin=0, vmax=vmax)
+        axs[i].set_xticks([])
+        axs[i].set_yticks([])
+        if not divisions is None:
+            axs[i].set_title(f'Division: {divisions[i]}')
+
+    plt.tight_layout()
+
+    return fig
 
 #wDM#

@@ -13,7 +13,7 @@ Parameters:<br>
 -----------<br>
 scan: 3D numpy array<br>
     3D scan to display<br>
-coords: tuple as defined: (x,y,z)<br>
+coords: tuple as defined: (z,y,x)<br>
     initial coordinate to plot<br>
 <br>
 Returns:<br>
@@ -23,5 +23,5 @@ PlotCoordinate Object, calling plt.show() should display the interactive plot. <
 ### Example usage:<br>
 from plotting_functions import PlotCoordinate
 
-plotcoordinate = PlotCoordinate(scan=[3D numpy arr], coords=([x],[y],[z]))<br>
+plotcoordinate = PlotCoordinate(scan=[3D numpy arr], coords=([z],[y],[x]))<br>
 plt.show()<br>
