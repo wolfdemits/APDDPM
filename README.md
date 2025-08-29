@@ -12,10 +12,10 @@ Imaging.
 
     (|_ RESIDUALS)
     (|_ Residual_stats.json)
-|_ PRE-PROCESSING
+|_ PREPROCESSING
     |_ datamanager.py
     |_ convert-to-zarr.py
-|_ ML-MODEL
+|_ ML_MODEL
     |_ ... 
 |_ VISUALIZATION
     |_ visualizer.py (uses ./PREPROCESSING/datamanager.py)
