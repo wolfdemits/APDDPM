@@ -113,7 +113,7 @@ class APD:
             * getitem  --> defines a dictionary with all info about a certain pair
         """
 
-        def __init__(self, PatientList, DATAPATH=pathlib.Path('./DATA'), Planes = ["Coronal", "Sagittal", "Transax"], RandomFlip=False, divisions=[1, 5, 10, 20, 60], T=4):
+        def __init__(self, PatientList, DATAPATH=pathlib.Path('./DATA'), Planes = ["Coronal", "Sagittal", "Transax"], RandomFlip=False, divisions=[1, 5, 10, 20, 60]):
             self.RandomFlip = RandomFlip
             self.DATAPATH = DATAPATH
 
@@ -128,7 +128,6 @@ class APD:
 
             # divisions
             self.divisions = divisions
-            self.T = T
 
             for patient in PatientList:
                 for plane in Planes:
@@ -156,47 +155,38 @@ class APD:
             # assigned random patient, plane and slice
             patient, plane, slice_idx = self.search[index]
 
-            # sample LD division:
-            ld_div = np.floor(self.rng.uniform(0,self.T,1))
+            images = torch.zeros((len(self.divisions), self.shape[0], self.shape[1], self.shape[2]), dtype=torch.float32)
 
             self.root = zarr.open_group(str(self.DATAPATH / 'PATIENTS'), mode='r')
-            ld_scan = self.root[patient]['div' + str(self.divisions[ld_div+1])][:]
-            hd_scan = self.root[patient]['div' + str(self.divisions[0])][:]
 
-            if plane == 'Coronal':
-                ld_img = ld_scan[:,slice_idx,:]
-                hd_img = hd_scan[:,slice_idx,:]
-            elif plane == 'Sagittal':
-                ld_img = ld_scan[:,:,slice_idx]
-                hd_img = hd_scan[:,:,slice_idx]
-            elif plane == 'Transax':
-                ld_img = ld_scan[slice_idx:,:]
-                hd_img = hd_scan[slice_idx:,:]
+            for i, div in enumerate(self.divisions):
+                scan = self.root[patient]['div' + str(div)][:]
 
-            # cleanup
-            del ld_scan
-            del hd_scan
+                if plane == 'Coronal':
+                    img = scan[:,slice_idx,:]
+                elif plane == 'Sagittal':
+                    img = scan[:,:,slice_idx]
+                elif plane == 'Transax':
+                    img = scan[slice_idx:,:]
 
-            # images should be normalised when fed to network
-            Img_LD = ld_img.astype(np.float32)
-            Img_HD = hd_img.astype(np.float32)
+                # cleanup
+                del scan
 
-            # Expand dimension
-            Img_LD = np.expand_dims(Img_LD, axis=0)
-            Img_HD = np.expand_dims(Img_HD, axis=0)
+                # convert to numpy arr
+                Img = img.astype(np.float32)
 
-            Img_LD, mean, std = self.normalise(torch.FloatTensor(Img_LD))
-            Img_HD, _, _ = self.normalise(torch.FloatTensor(Img_HD), mean, std)
+                # Expand dimensions
+                Img = np.expand_dims(Img, axis=0)
 
-            if self.RandomFlip:
-                if self.rng.random() > 0.5: # vertical flip
-                    LD_Img = torch.flip(LD_Img, dims=[0])    
-                    HD_Img = torch.flip(HD_Img, dims=[0])  
-                if self.rng.random() > 0.5: # horizontal flip
-                    LD_Img = torch.flip(LD_Img, dims=[1])
-                    HD_Img = torch.flip(HD_Img, dims=[1])  
+                if self.RandomFlip:
+                    if self.rng.random() > 0.5: # vertical flip
+                        Img = torch.flip(Img, dims=[0])
+                    if self.rng.random() > 0.5: # horizontal flip
+                        Img = torch.flip(Img, dims=[1])
 
-            item = {'LD_Img': LD_Img, 'HD_Img': HD_Img, 'Patient': patient, 'Plane': plane, 'SliceIndex': slice_idx, 'LD division': ld_div, 'divisions': self.divisions}
+                images[i] = img
+
+            item = {'Images': images, 'divisions': self.divisions, 'Patient': patient, 'Plane': plane, 'SliceIndex': slice_idx}
 
             return item
 
