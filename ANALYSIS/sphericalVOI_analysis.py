@@ -11,7 +11,7 @@ def voi_sph_sub(scan, xctr, yctr, zctr, Sph_Diam_Vxl, wflg):
     Parameters:
     -----------
     scan: 3D numpy array
-        3D scan with SUV data
+        3D scan with SUV data.
     xctr, yctr, zctr : float
         Center coordinates of the spherical VOI in voxel units.
     Sph_Diam_Vxl : float

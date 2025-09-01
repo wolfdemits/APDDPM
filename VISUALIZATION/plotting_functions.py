@@ -1,5 +1,8 @@
 import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
 import numpy as np
+
+from ANALYSIS.circularROI_analysis import roi_circ_sub
 
 # utility class for colored print outputs
 class bcolors:
@@ -14,11 +17,10 @@ class bcolors:
     UNDERLINE = '\033[4m'
 
 ##TODO
-# - write docs: ctrl + scroll, normal scroll, double click = reset, ALSO: default matpltlib pan/zoom function, right click = change coordinate
 # - add circular VOI -> click + space
 
 class PlotCoordinate:
-    def __init__(self, scan, coords):
+    def __init__(self, scan, coords, roi_diam=10):
         """
         Interactive plot to display 3D scan as seen from 3 anatomical planes.
 
@@ -47,6 +49,8 @@ class PlotCoordinate:
 
         self.scan = scan
         self.coords = coords
+        self.diam = roi_diam
+        self.roi_coords = None
         self.xlim = [None, None, None]
         self.ylim = [None, None, None]
 
@@ -109,6 +113,18 @@ class PlotCoordinate:
         if not self.ylim[2] is None:
             self.ax[2].set_ylim(self.ylim[2])
 
+        # add visual
+        if not (self.roi_coords is None):
+            x, y, plane = self.roi_coords
+            circ = Circle((x, y), self.diam/2, alpha=0.3, color='red')
+
+            if plane == 'Coronal':
+                self.ax[0].add_patch(circ)
+            elif plane == 'Sagittal':
+                self.ax[1].add_patch(circ)
+            elif plane == 'Transaxial':
+                self.ax[2].add_patch(circ)
+
         # redraw
         plt.draw()
 
@@ -166,6 +182,34 @@ class PlotCoordinate:
 
             self.render()
             return
+        
+        # space + click -> add ROI
+        if event.key == ' ':
+            # get mouse location
+            x_, y_ = round(event.xdata), round(event.ydata)
+
+            if event.inaxes is self.ax[0]:
+                # CORONAL
+                avg, std = roi_circ_sub(scan=self.scan, xctr=x_, yctr=self.coords[1], zctr=y_, Sph_Diam_Vxl=self.diam, wflg=0)
+                print(f'ROI analysis: avg: {avg}, std: {std}')
+
+                self.roi_coords = (x_, y_, 'Coronal')
+            elif event.inaxes is self.ax[1]:
+                # SAGITTAL
+                avg, std = roi_circ_sub(scan=self.scan, xctr=self.coords[2], yctr=x_, zctr=y_, Sph_Diam_Vxl=self.diam, wflg=0)
+                print(f'ROI analysis: avg: {avg}, std: {std}')
+
+                self.roi_coords = (x_, y_, 'Sagittal')
+            elif event.inaxes is self.ax[2]:
+                # TRANSAXIAL
+                avg, std = roi_circ_sub(scan=self.scan, xctr=x_, yctr=y_, zctr=self.coords[0], Sph_Diam_Vxl=self.diam, wflg=0)
+                print(f'ROI analysis: avg: {avg}, std: {std}')
+
+                self.roi_coords = (x_, y_, 'Transaxial')
+            else:
+                return
+            
+            self.render()
         return
     
     def onscroll(self, event):

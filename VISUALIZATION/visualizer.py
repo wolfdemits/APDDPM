@@ -437,7 +437,7 @@ def compute_stats_ROI():
     std_roi = np.zeros((len(divisions)))
 
     for i in range(len(divisions)):
-        mean_roi[i], std_roi[i] = voi_sph_sub(scan[i], sphere_roi.x, sphere_roi.y, sphere_roi.z, sphere_roi.r, 0)
+        mean_roi[i], std_roi[i] = voi_sph_sub(scan[i], sphere_roi.x, sphere_roi.y, sphere_roi.z, Sph_Diam_Vxl=sphere_roi*2, wflg=0)
 
     return
 
