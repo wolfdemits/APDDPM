@@ -16,9 +16,6 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-##TODO
-# - add circular VOI -> click + space
-
 class PlotCoordinate:
     def __init__(self, scan, coords, roi_diam=10):
         """

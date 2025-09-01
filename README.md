@@ -9,6 +9,7 @@ Imaging.
       |_ [ID]
       |_ info.json
     |_ data.json
+    |_ datasets.json
 
     (|_ RESIDUALS)
     (|_ Residual_stats.json)
@@ -16,7 +17,7 @@ Imaging.
     |_ datamanager.py
     |_ convert-to-zarr.py
 |_ ML_MODEL
-    |_ ... 
+    |_ APD.py
 |_ VISUALIZATION
     |_ visualizer.py (uses ./PREPROCESSING/datamanager.py)
     |_ plotting_functions.py

@@ -4,3 +4,7 @@ DATA-TEMP
 .vscode
 Testing
 VISUALIZATION/reload.py
+ML_MODEL/dataloader-test.ipynb
+ML_MODEL/__pycache__
+ML_MODEL/.ipynb_checkpoints
+APD_test.py

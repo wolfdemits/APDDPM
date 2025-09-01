@@ -28,6 +28,7 @@ plt.show()<br>
 
 ## Usage of interactive plot:
 - Pan/Zoom: use default matplotlib functions. An additional zoom function can be used by ctrl + scrolling to zoom in/out. <br>
-- Double click: reset viewbox
-- Scroll: move slice up/down
-- Right Click: change coordinate to mouse position
+- Double click: reset viewbox<br>
+- Scroll: move slice up/down<br>
+- Right Click: change coordinate to mouse position<br>
+- Click + Space: analyse ROI <br>
