@@ -13,6 +13,6 @@ scan, divisions = datamanager.load_scan(PATIENT_ID)
 
 plotcoordinate = PlotCoordinate(scan=scan[0], coords=(100,150,150))
 
-fig = plot_divisions(scan, plane='Transaxial', slice_idx=150, divisions=divisions)
+# fig = plot_divisions(scan, plane='Transaxial', slice_idx=150, divisions=divisions)
 
 plt.show()

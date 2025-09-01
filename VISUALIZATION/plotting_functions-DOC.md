@@ -25,3 +25,9 @@ from plotting_functions import PlotCoordinate
 
 plotcoordinate = PlotCoordinate(scan=[3D numpy arr], coords=([z],[y],[x]))<br>
 plt.show()<br>
+
+## Usage of interactive plot:
+- Pan/Zoom: use default matplotlib functions. An additional zoom function can be used by ctrl + scrolling to zoom in/out. <br>
+- Double click: reset viewbox
+- Scroll: move slice up/down
+- Right Click: change coordinate to mouse position

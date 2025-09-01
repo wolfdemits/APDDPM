@@ -1,5 +1,5 @@
 # APPDPM
-Development and Validation of a Dose-Aware Anchored Path Diffusion Denoising Probabilistic Model for Low-Dose PET
+Development and Validation of a Dose-Aware Anchored Path Denoising Diffusion Probabilistic Model for Low-Dose PET
 Imaging. 
 
 ## Used file structure:
