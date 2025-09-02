@@ -51,7 +51,7 @@ class APD:
             Requested image at time vector t after forward diffusion. 
         """
 
-        # TODO make more memory efficient
+        # TODO make more memory efficient eg: stop at time vector
 
         device = x0.device
         # batch size
