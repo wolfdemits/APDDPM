@@ -15,6 +15,8 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
+# TODO: write docstrings: example for dataloaders: output shapes
+
 class APD:
     def __init__(self, DATAPATH=pathlib.Path('./DATA')):
         self.DATAPATH = DATAPATH
@@ -64,12 +66,12 @@ class APD:
         # convergence check
         if convergence_verbose:
             critical_value_beta = np.sqrt(8/15 * (T**4 - 1)/(T**5))
-            print(f'{bcolors.WARNING}Critical beta value: {critical_value_beta} {bcolors.ENDC}')
-            print(f'{bcolors.WARNING}Beta value: {beta} {bcolors.ENDC}')
+            print(f'{bcolors.WARNING}Critical beta value: {critical_value_beta} {bcolors.ENDC}', flush=True)
+            print(f'{bcolors.WARNING}Beta value: {beta} {bcolors.ENDC}', flush=True)
             if (beta > critical_value_beta*10):
-                print(f'{bcolors.FAIL}Will not converge!{bcolors.ENDC}')
+                print(f'{bcolors.FAIL}Will not converge!{bcolors.ENDC}', flush=True)
             elif (beta > critical_value_beta):
-                print(f'{bcolors.WARNING}WARN: in range of beta_crit, might not converge! (but is possible){bcolors.ENDC}')
+                print(f'{bcolors.WARNING}WARN: in range of beta_crit, might not converge! (but is possible){bcolors.ENDC}', flush=True)
 
         # prepare torch tensors: (T, B, Width, Height) -> T = time axis, B = batch axis
         images = torch.zeros((T+1, B, x0.shape[1], x0.shape[2])).to(device)
@@ -124,7 +126,7 @@ class APD:
             self.search = []
 
             # data shape
-            shape = (712, 300, 300)
+            self.shape = (712, 300, 300)
 
             # divisions
             self.divisions = divisions
@@ -132,30 +134,29 @@ class APD:
             for patient in PatientList:
                 for plane in Planes:
                     if plane == 'Coronal':
-                        for idx in range(shape[1]):
+                        for idx in range(self.shape[1]):
                             self.search.append((patient, plane, idx))
                     elif plane == 'Sagittal':
-                        for idx in range(shape[2]):
+                        for idx in range(self.shape[2]):
                             self.search.append((patient, plane, idx))
                     elif plane == 'Transax':
-                        for idx in range(shape[0]):
+                        for idx in range(self.shape[0]):
                             self.search.append((patient, plane, idx))
             return
-        
-        def normalise(self, x, mean=None, std=None):
-            # Z-score normalisation
-            if mean is None or std is None:
-                mean = torch.mean(x)
-                std = torch.std(x)
-                return (x - mean) / std, mean, std
-            else:
-                return (x - mean) / std, mean, std
         
         def __getitem__(self, index):
             # assigned random patient, plane and slice
             patient, plane, slice_idx = self.search[index]
 
-            images = torch.zeros((len(self.divisions), self.shape[0], self.shape[1], self.shape[2]), dtype=torch.float32)
+            if plane == 'Coronal':
+                images = torch.zeros((len(self.divisions), self.shape[0], self.shape[2]), dtype=torch.float32)
+            elif plane == 'Sagittal':
+                images = torch.zeros((len(self.divisions), self.shape[0], self.shape[1]), dtype=torch.float32)
+            elif plane == 'Transaxial':
+                images = torch.zeros((len(self.divisions), self.shape[1], self.shape[2]), dtype=torch.float32)
+            else:
+                print(bcolors.FAIL + 'Incorrect plane' + bcolors.ENDC, flush=True)
+                return
 
             self.root = zarr.open_group(str(self.DATAPATH / 'PATIENTS'), mode='r')
 
@@ -178,13 +179,16 @@ class APD:
                 # Expand dimensions
                 Img = np.expand_dims(Img, axis=0)
 
+                # to torch tensor
+                Img = torch.from_numpy(Img)
+
                 if self.RandomFlip:
                     if self.rng.random() > 0.5: # vertical flip
                         Img = torch.flip(Img, dims=[0])
                     if self.rng.random() > 0.5: # horizontal flip
                         Img = torch.flip(Img, dims=[1])
 
-                images[i] = img
+                images[i] = Img
 
             item = {'Images': images, 'divisions': self.divisions, 'Patient': patient, 'Plane': plane, 'SliceIndex': slice_idx}
 
@@ -192,3 +196,57 @@ class APD:
 
         def __len__(self):
             return len(self.search)
+        
+    class ResidualSet:
+        # TODO
+        def __init__(self):
+            return
+        
+    ## Collate function
+    class CollateFn2D():
+
+        """ Upon loading the individual data (i.e., slices of different sizes, if cropping was used) into one batch
+            -> Input data may not necessarily be of the same matrix size
+
+            of the same matrix size, but all slices in one batch need to be 
+        of the same size, so collate function is used to pad the slices to equal size """
+
+        def __call__(self, item_list):
+
+            batch = {} # Initialise an empty dictionary
+            
+
+            # Iterate over all keys of an item (so over 'LR_Img', 'HR_Img', 'Subject', 'Plane' and 'SliceName')
+
+            for key in item_list[0].keys():
+
+                # If the key is 'Images' (= these contain the data arrays) -> They need to be padded
+                
+                if key == 'Images': 
+                    
+                    tensor_list = [item[key] for item in item_list]
+                    shape_list  = [tensor.shape for tensor in tensor_list]
+
+                    height_max  = max(shape[-2] for shape in shape_list) # Determines the max height of all tensors --> we have to padd al the other tensors to this height
+                    width_max   = max(shape[-1] for shape in shape_list) # Determines the max width of all tensors --> we have to padd all the other tensors to this width
+                    
+                    pad_list    = [((width_max - shape[-1]) // 2,      # left padding
+                                    -(-(width_max - shape[-1]) // 2),  # right padding
+                                    (height_max - shape[-2]) // 2,     # top padding
+                                    -(-(height_max - shape[-2]) // 2)) # bottom padding   
+                                for shape in shape_list]
+                    
+                    tensor = torch.stack([
+                                torch.nn.functional.pad(tensor, padding, value=-1) 
+                                for tensor, padding in zip(tensor_list, pad_list)])
+                    
+                    # Add stacked & padded tensor data to batch dictionary using the exsisting key
+                    batch[key] = torch.transpose(tensor, 0,1)
+                
+                else:
+                    # If key is something other than 'LR_Img' or 'HR_Img' --> Merge data of all items in a list using stack command and add to batch
+                    batch[key] = np.stack([item[key] for item in item_list])
+
+            return batch
+        
+#wDM#
