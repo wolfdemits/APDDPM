@@ -4,8 +4,14 @@ import json
 import pathlib
 from scipy.ndimage import binary_erosion
 
-inpath = pathlib.Path("./DATA")
-outpath = pathlib.Path("./DATA_PREPROCESSED")
+LOCAL = True
+
+if LOCAL:
+    inpath = pathlib.Path("./DATA")
+    outpath = pathlib.Path("./DATA_PREPROCESSED")
+else:
+    inpath = pathlib.Path('/kyukon/data/gent/vo/000/gvo00006/vsc48955/APDDPM/DATA')
+    outpath = pathlib.Path('/kyukon/data/gent/vo/000/gvo00006/vsc48955/APDDPM/DATA_PREPROCESSED')
 
 from PREPROCESSING.datamanager import Datamanager
 datamanager = Datamanager(DATAPATH=inpath)
@@ -58,8 +64,8 @@ root = zarr.open_group(str(outpath / 'PATIENTS'), mode='a')
 
 data_obj = {}
 
-for patient in patients:
-    print(bcolors.OKCYAN + f'Processing patient: {patient}' + bcolors.ENDC)
+for patient in patients[:10]: # only first 10 for local
+    print(bcolors.OKCYAN + f'Processing patient: {patient}' + bcolors.ENDC, flush=True)
     scan, divisions = datamanager.load_scan(patient)
 
     # create patient group
@@ -98,7 +104,7 @@ for patient in patients:
             threshold = 0.1
         else:
             threshold = 0.5
-            print(bcolors.WARNING + 'Invalid tracer -> threshold not defined properly' + bcolors.ENDC)
+            print(bcolors.WARNING + 'Invalid tracer -> threshold not defined properly' + bcolors.ENDC, flush=True)
 
         # crop scan in 3D based on full image
         # binary erosion, 5 iterations and threshold defined above
@@ -141,4 +147,4 @@ with open(outpath / 'datasets.json', 'w') as f:
     json.dump(datasets_obj, f)
 
 # final data.json file
-print(bcolors.OKGREEN + 'Pre-processing completed' + bcolors.ENDC)
+print(bcolors.OKGREEN + 'Pre-processing completed' + bcolors.ENDC, flush=True)

@@ -9,7 +9,7 @@ outpath = pathlib.Path("./DATA")
 SHAPE = (712,300,300)
 
 dirlist = sorted([f.name for f in inpath.iterdir() if f.is_dir()])
-print(f'Found patient directories: {dirlist}')
+print(f'Found patient directories: {dirlist}', flush=True)
 
 data_obj = {}
 
@@ -91,7 +91,7 @@ for dir_name in dirlist:
     with open(outpath / 'PATIENTS' / patient_id / 'info.json', 'w') as f:
         json.dump(info_obj, f)
 
-    print(f'Completed converting: {name}')
+    print(f'Completed converting: {name}', flush=True)
 
 
 # write final data.json
@@ -99,4 +99,4 @@ for dir_name in dirlist:
 with open(outpath / 'data.json', 'w') as f:
     json.dump(data_obj, f)
 
-print(f'Conversion completed. ')
+print(f'Conversion completed. ', flush=True)

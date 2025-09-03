@@ -11,10 +11,10 @@ PATIENT_ID = 'r001'
 datamanager = Datamanager(DATAPATH)
 scan, divisions = datamanager.load_scan(PATIENT_ID)
 
-plotcoordinate = PlotCoordinate(scan=scan[0], coords=(100,150,150), roi_diam=10, print_mean_SUV=True, SUV_threshold=1.5)
+# plotcoordinate = PlotCoordinate(scan=scan[0], coords=(100,150,150), roi_diam=10, print_mean_SUV=True, SUV_threshold=1.5)
 
 # fig = plot_divisions(scan, plane='Coronal', slice_idx=150, divisions=divisions)
 
-# fig = view_preprocessed('r003', 'Coronal', 0)
+fig = view_preprocessed('r001', 'Coronal', 0)
 
 plt.show()

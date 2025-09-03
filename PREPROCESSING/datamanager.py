@@ -25,13 +25,13 @@ class Datamanager:
             with open(self.DATAPATH / 'data.json') as f:
                 self.data_obj = json.load(f)
         except:
-            print(bcolors.FAIL + "Failed to retreive data object" + bcolors.ENDC)
+            print(bcolors.FAIL + "Failed to retreive data object" + bcolors.ENDC, flush=True)
             return
 
         try:
             self.root = zarr.open_group(str(self.DATAPATH / 'PATIENTS'), mode='r')   
         except:
-            print(bcolors.FAIL + "Failed to find zarr root" + bcolors.ENDC)
+            print(bcolors.FAIL + f"Failed to find zarr root: {str(self.DATAPATH / 'PATIENTS')}" + bcolors.ENDC, flush=True)
             return
 
         self.available_ids = []
@@ -58,7 +58,7 @@ class Datamanager:
 
         # check if in the data.json
         if not patient_id in self.available_ids:
-            print(bcolors.WARNING + "Incorrect patient id" + bcolors.ENDC)
+            print(bcolors.WARNING + "Incorrect patient id" + bcolors.ENDC, flush=True)
             return
 
         # load info object
@@ -98,7 +98,7 @@ class Datamanager:
     def set_tracer(self, tracer):
         """Changes tracer pointer (current_tracer) to new tracer, note: the image still needs to be loaded via load_scan()!"""
         if not tracer in self.available_tracers:
-            print(bcolors.WARNING + "Incorrect tracer" + bcolors.ENDC)
+            print(bcolors.WARNING + "Incorrect tracer" + bcolors.ENDC, flush=True)
             return
         
         self.current_tracer = tracer
