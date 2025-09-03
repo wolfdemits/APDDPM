@@ -203,7 +203,7 @@ def soft_refresh():
         std_roi_val_2.configure(text=np.round(std_roi[view2_div], 5))
 
     #### image rendering ###############
-    vmax = max(np.max(img1_arr), np.max(img2_arr))
+    vmax = max(np.max(img1_arr), np.max(img2_arr))*0.5
 
     fig_img1, ax_img1 = plt.subplots(figsize=(5, 5))
     ax_img1.imshow(img1_arr, vmin=0, vmax=vmax, cmap="gray_r")
@@ -452,7 +452,7 @@ def open_ROI_gui():
     img1_arr, _ = slice_scan(div1=0)
 
     # create plot for interactive gui
-    vmax = float(np.max(img1_arr))
+    vmax = float(np.max(img1_arr))*0.5
     im = hyperspy.signals.Signal2D(img1_arr)
     im.plot(vmin=0, vmax=vmax, cmap='gray_r', colorbar=False)
 

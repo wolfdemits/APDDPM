@@ -7,12 +7,22 @@ Imaging.
 |_ DATA
     |_ PATIENTS
       |_ [ID]
-      |_ info.json
+            |_ div[x]
+            |_ info.json
     |_ data.json
     |_ datasets.json
 
     (|_ RESIDUALS)
     (|_ Residual_stats.json)
+|_ DATA_PREPROCESSED
+    |_ PATIENTS
+        |_ [ID]
+            |_ [PLANE]
+                |_ div[x]
+                    |_ [idx]
+                |_ info.json
+    |_ data.json
+    |_ datasets.json
 |_ PREPROCESSING
     |_ datamanager.py
     |_ convert-to-zarr.py

@@ -2,6 +2,10 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 import numpy as np
 
+import zarr
+import json
+import pathlib
+
 from ANALYSIS.circularROI_analysis import roi_circ_sub
 
 # utility class for colored print outputs
@@ -17,7 +21,7 @@ class bcolors:
     UNDERLINE = '\033[4m'
 
 class PlotCoordinate:
-    def __init__(self, scan, coords, roi_diam=10):
+    def __init__(self, scan, coords, roi_diam=10, print_mean_SUV=False, SUV_threshold = None, vmax_frac=None):
         """
         Interactive plot to display 3D scan as seen from 3 anatomical planes.
 
@@ -50,6 +54,12 @@ class PlotCoordinate:
         self.roi_coords = None
         self.xlim = [None, None, None]
         self.ylim = [None, None, None]
+        self.print_mean_SUV = print_mean_SUV
+        self.SUV_threshold = SUV_threshold
+        if vmax_frac is None:
+            self.vmax_frac = 1
+        else:
+            self.vmax_frac = vmax_frac
 
         # init fig, ax
         self.fig, self.ax = plt.subplots(1, 3, figsize=(12, 5))
@@ -75,7 +85,7 @@ class PlotCoordinate:
         vmax = max(float(np.max(self.scan[:,y,:])), float(np.max(self.scan[z,:,:])), float(np.max(self.scan[:,:,x])))
 
         # coronal
-        self.ax[0].imshow(self.scan[:,y,:], cmap='gray_r', vmin=0, vmax=vmax)
+        self.ax[0].imshow(self.scan[:,y,:], cmap='gray_r', vmin=0, vmax=vmax*self.vmax_frac)
         self.ax[0].set_title('Coronal', c='green')
         self.ax[0].axhline(z, linestyle='--', c='blue', alpha=0.2)
         self.ax[0].axvline(x, linestyle='--', c='red', alpha=0.2)
@@ -87,7 +97,7 @@ class PlotCoordinate:
             self.ax[0].set_ylim(self.ylim[0])
 
         # Sagittal
-        self.ax[1].imshow(self.scan[:,:,x], cmap='gray_r', vmin=0, vmax=vmax)
+        self.ax[1].imshow(self.scan[:,:,x], cmap='gray_r', vmin=0, vmax=vmax*self.vmax_frac)
         self.ax[1].set_title('Sagittal', c='red')
         self.ax[1].axhline(z, linestyle='--', c='blue', alpha=0.2)
         self.ax[1].axvline(y, linestyle='--', c='green', alpha=0.2)
@@ -99,7 +109,7 @@ class PlotCoordinate:
             self.ax[1].set_ylim(self.ylim[1])
 
         # Transaxial
-        self.ax[2].imshow(self.scan[z,:,:], cmap='gray_r', vmin=0, vmax=vmax)
+        self.ax[2].imshow(self.scan[z,:,:], cmap='gray_r', vmin=0, vmax=vmax*self.vmax_frac)
         self.ax[2].set_title('Transaxial', c='blue')
         self.ax[2].axhline(y, linestyle='--', c='green', alpha=0.2)
         self.ax[2].axvline(x, linestyle='--', c='red', alpha=0.2)
@@ -178,6 +188,28 @@ class PlotCoordinate:
                 return
 
             self.render()
+            if self.print_mean_SUV:
+                z, y, x = self.coords
+
+                mean_SUV_c = np.mean(self.scan[:,y,:])
+                mean_SUV_s = np.mean(self.scan[:,:,x])
+                mean_SUV_t = np.mean(self.scan[z,:,:])
+
+                if self.SUV_threshold is None:
+                    print(bcolors.OKCYAN + f'Coronal: {mean_SUV_c}, Sagittal: {mean_SUV_s}, Transaxial: {mean_SUV_t}' + bcolors.ENDC)
+                else: 
+                    threshold = self.SUV_threshold
+
+                    c_color = bcolors.OKCYAN
+                    s_color = bcolors.OKCYAN
+                    t_color = bcolors.OKCYAN
+
+                    if mean_SUV_c < threshold: c_color = bcolors.FAIL
+                    if mean_SUV_s < threshold: s_color = bcolors.FAIL
+                    if mean_SUV_t < threshold: t_color = bcolors.FAIL
+
+                    print(c_color + f'Coronal: {mean_SUV_c},' + s_color + f'Sagittal: {mean_SUV_s},' + t_color + f'Transaxial: {mean_SUV_t}' + bcolors.ENDC)
+
             return
         
         # space + click -> add ROI
@@ -330,6 +362,49 @@ def plot_divisions(scans, plane, slice_idx, divisions=None):
         axs[i].set_yticks([])
         if not divisions is None:
             axs[i].set_title(f'Division: {divisions[i]}')
+
+    plt.tight_layout()
+
+    return fig
+
+def view_preprocessed(id, plane, slice_idx):
+    DATAPATH = pathlib.Path('./DATA_PREPROCESSED')
+
+    # root (read)
+    root = zarr.open_group(str(DATAPATH / 'PATIENTS'), mode='r')
+
+    # load info object
+    info_obj = {}
+    with open(DATAPATH / 'PATIENTS' / id / 'info.json') as f:
+            info_obj = json.load(f)
+
+    # read in scan 
+    divisions = info_obj["divisions"]
+
+    images = []
+
+    for i, div in enumerate(divisions):
+        img = root[id][plane][f'div{str(div)}'][str(slice_idx)]
+        images.append(img)
+    
+    # plot
+    vmax = 0
+
+    for i in range(len(images)):
+        arr = images[i]
+        if float(np.max(arr) > vmax):
+            vmax = np.max(arr)
+
+    fig, axs = plt.subplots(1, len(images), figsize=(3*len(images), 5))
+    for i in range(len(images)):
+        arr = images[i]
+        axs[i].imshow(arr, cmap='gray_r', vmin=0, vmax=vmax*0.1)
+        axs[i].set_xticks([])
+        axs[i].set_yticks([])
+        if not divisions is None:
+            axs[i].set_title(f'Division: {divisions[i]}')
+
+    fig.suptitle(f'Shape: {images[0].shape}')
 
     plt.tight_layout()
 
