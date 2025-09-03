@@ -8,21 +8,16 @@ Imaging.
     |_ PATIENTS
       |_ [ID]
             |_ div[x]
-            |_ info.json
+        |_ info.json
     |_ data.json
-    |_ datasets.json
-
-    (|_ RESIDUALS)
-    (|_ Residual_stats.json)
 |_ DATA_PREPROCESSED
     |_ PATIENTS
         |_ [ID]
             |_ [PLANE]
                 |_ div[x]
                     |_ [idx]
-                |_ info.json
+            |_ info.json
     |_ data.json
-    |_ datasets.json
 |_ PREPROCESSING
     |_ datamanager.py
     |_ convert-to-zarr.py
@@ -35,6 +30,16 @@ Imaging.
     |_ plotting_script.py
 |_ ANALYSIS
     |_ sphericalVOI_analysis.py
+|_ RESIDUALS
+    |_ PATIENTS
+        |_ [ID]
+            |_ [PLANE]
+                |_ div[x]
+                    |_ [idx]
+            |_ info.json
+    |_ data.json
+    |_ residualstats.json???
+|_ datasets.json
 </pre>
 
 data.json: -> contains info about tracers and patient IDs, used by filemanager <br>

@@ -6,8 +6,16 @@ import json
 import torch
 from matplotlib.animation import FuncAnimation
 
+LOCAL = True
+
+if LOCAL:
+    PATH = pathlib.Path('./')
+else:
+    PATH = pathlib.Path('/kyukon/data/gent/vo/000/gvo00006/vsc48955/APDDPM')
+
+DATAPATH = PATH / 'DATA_PREPROCESSED'
+
 # init instance
-DATAPATH = pathlib.Path('./DATA')
 APD = APD(DATAPATH)
 
 # utility class for colored print outputs
@@ -108,7 +116,7 @@ B = 1
 # dataloader
 # load info object
 datasets_obj = {}
-with open(DATAPATH / 'datasets.json') as f:
+with open(PATH / 'datasets.json') as f:
     datasets_obj = json.load(f)
 
 # Load training data
@@ -135,8 +143,6 @@ trainBatch = next(iter(TrainLoader))
 
 x0 = trainBatch['Images'][0].expand(N, -1, -1)
 xT = trainBatch['Images'][3].expand(N, -1, -1)
-
-print(x0.shape)
 
 images = diffuse(t=t, T=T, x0=x0, R=(xT-x0), beta=beta, convergence_verbose=True)
 
@@ -180,3 +186,4 @@ ani = FuncAnimation(fig=figA, func=update_plot, frames=T, interval=500, blit = F
 plt.show()
 
 print(f'Final sqdiff: {sqdiff_arr[-1]}')
+print(f'Final stdev: {std_arr[-1]}')

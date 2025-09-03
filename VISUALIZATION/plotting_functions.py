@@ -410,4 +410,47 @@ def view_preprocessed(id, plane, slice_idx):
 
     return fig
 
+def view_residual(id, plane, slice_idx):
+    DATAPATH = pathlib.Path('./RESIDUALS')
+
+    # root (read)
+    root = zarr.open_group(str(DATAPATH / 'PATIENTS'), mode='r')
+
+    # load info object
+    info_obj = {}
+    with open(DATAPATH / 'PATIENTS' / id / 'info.json') as f:
+            info_obj = json.load(f)
+
+    # read in scan 
+    divisions = info_obj["divisions"]
+
+    images = []
+
+    for i, div in enumerate(divisions):
+        img = root[id][plane][f'div{str(div)}'][str(slice_idx)]
+        images.append(img)
+    
+    # plot
+    vmax = 0
+
+    for i in range(len(images)):
+        arr = images[i]
+        if float(np.max(arr) > vmax):
+            vmax = np.max(arr)
+
+    fig, axs = plt.subplots(1, len(images), figsize=(3*len(images), 5))
+    for i in range(len(images)):
+        arr = images[i]
+        axs[i].imshow(arr, cmap='gray_r', vmin=0, vmax=vmax*0.1)
+        axs[i].set_xticks([])
+        axs[i].set_yticks([])
+        if not divisions is None:
+            axs[i].set_title(f'Division: {divisions[i]}')
+
+    fig.suptitle(f'Shape: {images[0].shape}')
+
+    plt.tight_layout()
+
+    return fig
+
 #wDM#

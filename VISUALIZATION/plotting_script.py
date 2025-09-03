@@ -1,7 +1,7 @@
 import pathlib
 import matplotlib.pyplot as plt
 
-from VISUALIZATION.plotting_functions import PlotCoordinate, plot_divisions, view_preprocessed
+from VISUALIZATION.plotting_functions import PlotCoordinate, plot_divisions, view_preprocessed, view_residual
 from PREPROCESSING.datamanager import Datamanager
 
 # path relative to terminal path
@@ -15,6 +15,8 @@ scan, divisions = datamanager.load_scan(PATIENT_ID)
 
 # fig = plot_divisions(scan, plane='Coronal', slice_idx=150, divisions=divisions)
 
-fig = view_preprocessed('r001', 'Coronal', 0)
+# fig = view_preprocessed('r001', 'Coronal', 0)
+
+fig = view_residual('r001', 'Coronal', 100)
 
 plt.show()

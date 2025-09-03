@@ -92,6 +92,8 @@ class APD:
             # --------------------------------------------------------
             #epsilon = next(iter(resLoader)).to(device)
 
+            # TODO: pad noise according to image to allow addition of noise
+
             # push everything to device
             xt = xt_1 + 1/T * R + sigma * f(t) * epsilon
             return xt
@@ -115,7 +117,7 @@ class APD:
             * getitem  --> defines a dictionary with all info about a certain pair
         """
 
-        def __init__(self, PatientList, DATAPATH=pathlib.Path('./DATA'), Planes = ["Coronal", "Sagittal", "Transax"], RandomFlip=False, divisions=[1, 5, 10, 20, 60]):
+        def __init__(self, PatientList, DATAPATH=pathlib.Path('./DATA_PREPROCESSED'), Planes = ["Coronal", "Sagittal", "Transax"], RandomFlip=False, divisions=[1, 5, 10, 20, 60]):
             self.RandomFlip = RandomFlip
             self.DATAPATH = DATAPATH
 
@@ -133,54 +135,34 @@ class APD:
 
             for patient in PatientList:
                 for plane in Planes:
-                    if plane == 'Coronal':
-                        for idx in range(self.shape[1]):
-                            self.search.append((patient, plane, idx))
-                    elif plane == 'Sagittal':
-                        for idx in range(self.shape[2]):
-                            self.search.append((patient, plane, idx))
-                    elif plane == 'Transax':
-                        for idx in range(self.shape[0]):
-                            self.search.append((patient, plane, idx))
+                    # find amount of slices
+                    try:
+                        slices = self.root[patient][plane]['div1'].keys()
+                    except:
+                        print(bcolors.FAIL + f'Unable to find specified group: {patient} -> {plane} -> div1' + bcolors.ENDC)
+                        return
+                    
+                    for idx in slices:
+                        self.search.append((patient, plane, idx))
             return
         
         def __getitem__(self, index):
             # assigned random patient, plane and slice
             patient, plane, slice_idx = self.search[index]
 
-            if plane == 'Coronal':
-                images = torch.zeros((len(self.divisions), self.shape[0], self.shape[2]), dtype=torch.float32)
-            elif plane == 'Sagittal':
-                images = torch.zeros((len(self.divisions), self.shape[0], self.shape[1]), dtype=torch.float32)
-            elif plane == 'Transaxial':
-                images = torch.zeros((len(self.divisions), self.shape[1], self.shape[2]), dtype=torch.float32)
-            else:
-                print(bcolors.FAIL + 'Incorrect plane' + bcolors.ENDC, flush=True)
-                return
+            images = []
 
             self.root = zarr.open_group(str(self.DATAPATH / 'PATIENTS'), mode='r')
 
             for i, div in enumerate(self.divisions):
-                scan = self.root[patient]['div' + str(div)][:]
+                try:
+                    img = self.root[patient][plane]['div' + str(div)][slice_idx][:]
+                except:
+                    print(bcolors.FAIL + f'Unable to find specified group: {patient} -> {plane} -> div{div} -> {slice_idx}' + bcolors.ENDC)
+                    break
 
-                if plane == 'Coronal':
-                    img = scan[:,slice_idx,:]
-                elif plane == 'Sagittal':
-                    img = scan[:,:,slice_idx]
-                elif plane == 'Transax':
-                    img = scan[slice_idx:,:]
-
-                # cleanup
-                del scan
-
-                # convert to numpy arr
-                Img = img.astype(np.float32)
-
-                # Expand dimensions
-                Img = np.expand_dims(Img, axis=0)
-
-                # to torch tensor
-                Img = torch.from_numpy(Img)
+                #convert to torch
+                Img = torch.as_tensor(img, dtype=torch.float32)
 
                 if self.RandomFlip:
                     if self.rng.random() > 0.5: # vertical flip
@@ -188,7 +170,9 @@ class APD:
                     if self.rng.random() > 0.5: # horizontal flip
                         Img = torch.flip(Img, dims=[1])
 
-                images[i] = Img
+                images.append(Img)
+
+            images = torch.stack(images)
 
             item = {'Images': images, 'divisions': self.divisions, 'Patient': patient, 'Plane': plane, 'SliceIndex': slice_idx}
 

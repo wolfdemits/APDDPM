@@ -2,7 +2,6 @@ import numpy as np
 import zarr
 import json
 import pathlib
-from scipy.ndimage import binary_erosion
 
 LOCAL = True
 
@@ -12,7 +11,7 @@ else:
     PATH = pathlib.Path('/kyukon/data/gent/vo/000/gvo00006/vsc48955/APDDPM')
 
 inpath = PATH / 'DATA'
-outpath = PATH / 'DATA_PREPROCESSED'
+outpath = PATH / 'RESIDUALS'
 
 from PREPROCESSING.datamanager import Datamanager
 datamanager = Datamanager(DATAPATH=inpath)
@@ -29,33 +28,6 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-def crop(scan, bb=None, thresh=0.01):
-    if (bb == None):
- 
-        mask = scan > thresh
-        n_erosions = 5
-        
-        for _ in range(n_erosions):
-            mask = binary_erosion(mask)
- 
-        nonzero_idx = np.nonzero(mask)
-
-        if (len(nonzero_idx[0]) != 0):
-            bb = [
-                [nonzero_idx[0].min() - n_erosions, nonzero_idx[0].max() + n_erosions],
-                [nonzero_idx[1].min() - n_erosions, nonzero_idx[1].max() + n_erosions],
-                [nonzero_idx[2].min() - n_erosions, nonzero_idx[2].max() + n_erosions]]
-            
-        else:
-            bb = [
-                [0, scan.shape[0]],
-                [0, scan.shape[1]],
-                [0, scan.shape[2]]]
- 
-    cropped_image = scan[bb[0][0]:bb[0][1], bb[1][0]:bb[1][1], bb[2][0]:bb[2][1]]
- 
-    return cropped_image, bb
-
 patients = datamanager.available_ids
 
 scan = datamanager.scan
@@ -65,7 +37,7 @@ root = zarr.open_group(str(outpath / 'PATIENTS'), mode='a')
 
 data_obj = {}
 
-for patient in patients[:10]: # only first 10 for local
+for patient in patients[:1]: # only first 10 for local
     print(bcolors.OKCYAN + f'Processing patient: {patient}' + bcolors.ENDC, flush=True)
     scan, divisions = datamanager.load_scan(patient)
 
@@ -84,6 +56,8 @@ for patient in patients[:10]: # only first 10 for local
     else:
         data_obj[tracer].append(patient)
 
+    info_obj['divisions'] = info_obj['divisions'][1:]
+
     # write info object
     with open(outpath / 'PATIENTS' / patient / 'info.json', 'w') as f:
             json.dump(info_obj, f)
@@ -93,47 +67,31 @@ for patient in patients[:10]: # only first 10 for local
         # create plane group
         plane_group = patient_group.require_group(plane)
 
-        # define thresholds
-        tracer = info_obj['tracer']
-        if tracer == 'FDG' or tracer == 'FNOS' or tracer == 'CFN':
-            threshold = 0.5
-        elif tracer == 'FTT':
-            threshold = 0.3
-        elif tracer == 'FES':
-            threshold = 0.2
-        elif tracer == 'Zr89':
-            threshold = 0.1
-        else:
-            threshold = 0.5
-            print(bcolors.WARNING + 'Invalid tracer -> threshold not defined properly' + bcolors.ENDC, flush=True)
-
-        # crop scan in 3D based on full image
-        # binary erosion, 5 iterations and threshold defined above
-        _, bb = crop(scan[0], thresh=threshold)
-
         for i, div in enumerate(divisions):
+            # if full image -> don't compute residual 
+            if i == 0:
+                continue
+
             # create div group
             div_group = plane_group.require_group(f'div{str(div)}')
 
-            img3D = scan[i][bb[0][0]:bb[0][1], bb[1][0]:bb[1][1], bb[2][0]:bb[2][1]]
-
             if plane == 'Coronal':
-                axis_range = img3D.shape[1]
+                axis_range = scan[0].shape[1]
             elif plane == 'Sagittal':
-                axis_range = img3D.shape[2]
+                axis_range = scan[0].shape[2]
             elif plane == 'Transaxial':
-                axis_range = img3D.shape[0]
+                axis_range = scan[0].shape[0]
 
             for idx in range(axis_range):
                 if plane == 'Coronal':
-                    img = img3D[:,idx,:]
+                    res = scan[i][:,idx,:] - scan[0][:,idx,:]
                 elif plane == 'Sagittal':
-                    img = img3D[:,:,idx]
+                    res = scan[i][:,:,idx] - scan[0][:,:,idx]
                 elif plane == 'Transaxial':
-                    img = img3D[idx,:,:]
+                    res = scan[i][idx,:,:] - scan[0][idx,:,:]
 
-                arr = div_group.create_array(str(idx), shape=img.shape , chunks=img.shape, dtype='float32')
-                arr[:] = img
+                arr = div_group.create_array(str(idx), shape=res.shape , chunks=res.shape, dtype='float32')
+                arr[:] = res
 
 # write out data.json
 with open(outpath / 'data.json', 'w') as f:
