@@ -82,16 +82,33 @@ for patient in patients[:5]: # only first 5 for local
             elif plane == 'Transaxial':
                 axis_range = scan[0].shape[0]
 
+            res_arr = []
+
             for idx in range(axis_range):
                 if plane == 'Coronal':
-                    res = scan[i][:,idx,:] - scan[0][:,idx,:]
+                    res_arr.append(scan[i][:,idx,:] - scan[0][:,idx,:])
                 elif plane == 'Sagittal':
-                    res = scan[i][:,:,idx] - scan[0][:,:,idx]
+                    res_arr.append(scan[i][:,:,idx] - scan[0][:,:,idx])
                 elif plane == 'Transaxial':
-                    res = scan[i][idx,:,:] - scan[0][idx,:,:]
+                    res_arr.append(scan[i][idx,:,:] - scan[0][idx,:,:])
 
-                arr = div_group.create_array(str(idx), shape=res.shape , chunks=res.shape, dtype='float32')
-                arr[:] = res
+            # variance normalization
+            res_arr = np.stack(res_arr)
+
+            population_std = np.std(res_arr)
+
+            # in rare case of divide by zero
+            if population_std == 0:
+                population_std = 10**-6
+
+            print(bcolors.OKBLUE + f'Population Std: {population_std}' + bcolors.ENDC, flush=True)
+
+            # save to dir
+            for idx in range(axis_range):
+                res_norm = res_arr[idx] / population_std
+                arr = div_group.create_array(str(idx), shape=res_norm.shape , chunks=res_norm.shape, dtype='float32')
+                arr[:] = res_norm
+
 
 # write out data.json
 with open(outpath / 'data.json', 'w') as f:
@@ -99,5 +116,3 @@ with open(outpath / 'data.json', 'w') as f:
 
 # final data.json file
 print(bcolors.OKGREEN + 'Pre-processing completed' + bcolors.ENDC, flush=True)
-
-# TODO: variance normalize residuals!!!

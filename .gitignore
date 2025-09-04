@@ -9,4 +9,8 @@ ML_MODEL/__pycache__
 ML_MODEL/.ipynb_checkpoints
 PREPROCESSING/cropping_test.py
 PREPROCESSING/cropping_pbs_test.py
+PREPROCESSING/residual_RMS_stats.py
 RESIDUALS
+RESIDUALS-test
+RESIDUALS-full-std
+RESIDUALS-mean-std

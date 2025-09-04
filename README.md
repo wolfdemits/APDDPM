@@ -21,6 +21,7 @@ Imaging.
 |_ PREPROCESSING
     |_ datamanager.py
     |_ convert-to-zarr.py
+    |_ residual_RMS_stats.py
 |_ ML_MODEL
     |_ APD.py
     |_ APD_test_animation.py
@@ -30,6 +31,7 @@ Imaging.
     |_ plotting_script.py
 |_ ANALYSIS
     |_ sphericalVOI_analysis.py
+    |_ circularROI_analysis.py
 |_ RESIDUALS
     |_ PATIENTS
         |_ [ID]
