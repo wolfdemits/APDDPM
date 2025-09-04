@@ -28,7 +28,7 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-def diffuse(self, t, T, x0, R, beta, res_info=None, convergence_verbose=False):
+def diffuse(t, T, x0, R, beta, res_info=None, convergence_verbose=False):
     """
     Apply Forward Anchored Path Diffusion Process to image.
 
@@ -88,7 +88,7 @@ def diffuse(self, t, T, x0, R, beta, res_info=None, convergence_verbose=False):
     resIterator = None
     if not res_info is None:
         # use residuals, else use gaussian noise
-        residualSet = APD.ResidualSet(PatientList=res_info['patients'], plane=res_info['plane'], division=res_info['division'], PATH = PATH, RandomFlip=True)
+        residualSet = APD.ResidualSet(PatientList=res_info['patients'], plane=res_info['plane'], division=res_info['division'], PATH=PATH, RandomFlip=True)
         sampler = torch.utils.data.RandomSampler(residualSet, replacement=True)
         resLoader = torch.utils.data.DataLoader(residualSet, sampler=sampler, batch_size=B)
         resIterator = iter(resLoader)
@@ -102,15 +102,11 @@ def diffuse(self, t, T, x0, R, beta, res_info=None, convergence_verbose=False):
         else:
             epsilon = next(resIterator)['Residual'].to(device)
 
-        print(epsilon.shape)
-        print(xt_1.shape)
-
-        # TODO 3: pad noise according to image to allow addition of noise
+        # pad noise according to image to allow addition of noise
         W, H = xt_1.shape[1], xt_1.shape[2]
-        X, Y = epsilon.shape[1], epsilon.shape[2]
-        epsilon = epsilon[:,X - W//2 : X + (W - W//2) + 1, Y - H//2 : Y + (H - H//2) + 1]
-        print(epsilon.shape)
+        X, Y = epsilon.shape[1]//2, epsilon.shape[2]//2
         
+        epsilon = epsilon[:, X - W//2 : X + (W - W//2), Y - H//2 : Y + (H - H//2)]
 
         # push everything to device
         xt = xt_1 + 1/T * R + sigma * f(t) * epsilon
@@ -131,21 +127,25 @@ datasets_obj = {}
 with open(PATH / 'datasets.json') as f:
     datasets_obj = json.load(f)
 
+TrainList = datasets_obj['train']
+
 # Load training data
 TrainSet = APD.Dataset(
-            PatientList=datasets_obj['train'],
+            PatientList=TrainList,
             PATH = PATH,
             Planes=["Coronal"],
             RandomFlip = False,
             divisions=[1, 5, 10, 20])
 
-TrainLoader = torch.utils.data.DataLoader(TrainSet, batch_size=B, collate_fn=APD.CollateFn2D(), shuffle=True, PATH=PATH)
+TrainLoader = torch.utils.data.DataLoader(TrainSet, batch_size=B, collate_fn=APD.CollateFn2D(), shuffle=True)
 # -> batch output shape: (T, B, Width, Height), T=time (divisions), B=Batch
 
 # inputs
 T = 20
 t = torch.ones((B), dtype=torch.uint8) * 4
 beta = np.sqrt(0.005)
+division = 20
+division_idx = 3 # div20
 
 # amount of samples
 N = 10
@@ -153,10 +153,15 @@ N = 10
 # training batch
 trainBatch = next(iter(TrainLoader))
 
+# run forward diffusion
 x0 = trainBatch['Images'][0].expand(N, -1, -1)
-xT = trainBatch['Images'][3].expand(N, -1, -1)
-
-images = diffuse(t=t, T=T, x0=x0, R=(xT-x0), beta=beta, convergence_verbose=True)
+xT = trainBatch['Images'][division_idx].expand(N, -1, -1)
+res_info = {
+    'division': division,
+    'plane': 'Coronal',
+    'patients': TrainList,
+}
+images = diffuse(t=t, T=T, x0=x0, R=(xT-x0), beta=beta, convergence_verbose=True, res_info=res_info)
 
 figA, axA = plt.subplots(2, 3,figsize=(15, 10), num='Anchored Path Diffusion Visualization')
 

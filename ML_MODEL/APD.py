@@ -34,6 +34,7 @@ class APD:
         -----------
         t: torch time tensor: (B,)
             Stop forward process at time point t. (inclusive)
+            ! t cannot contain timsetps 0 or lower !
         T: int
             Amount of total diffusion steps in chain.
         x0: torch image tensor: (B, Width, Height)
@@ -99,7 +100,7 @@ class APD:
             # pad noise according to image to allow addition of noise
             W, H = xt_1.shape[1], xt_1.shape[2]
             X, Y = epsilon.shape[1]//2, epsilon.shape[2]//2
-            
+
             epsilon = epsilon[:, X - W//2 : X + (W - W//2), Y - H//2 : Y + (H - H//2)]
 
             # push everything to device
@@ -112,11 +113,13 @@ class APD:
 
         # output tensor
         x_t = torch.zeros((B, x0.shape[1], x0.shape[2])).to(device)
+        x_t_1 = torch.zeros((B, x0.shape[1], x0.shape[2])).to(device)
 
         for b in range(B):
             x_t[b] = images[t[b].item(), b,:,:].squeeze()
+            x_t_1[b] = images[t[b].item() - 1, b,:,:].squeeze()
 
-        return x_t
+        return x_t, x_t_1
     
     class Dataset(torch.utils.data.Dataset):
         """ Class function for preparing/preprocessing the data that we want to feed to the neural network
