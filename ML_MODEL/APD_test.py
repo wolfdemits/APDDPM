@@ -13,10 +13,8 @@ if LOCAL:
 else:
     PATH = pathlib.Path('/kyukon/data/gent/vo/000/gvo00006/vsc48955/APDDPM')
 
-DATAPATH = PATH / 'DATA_PREPROCESSED'
-
 # init APD instance
-APD = APD(DATAPATH)
+APD = APD(PATH)
 
 # batch size
 B = 10
@@ -27,10 +25,12 @@ datasets_obj = {}
 with open(PATH / 'datasets.json') as f:
     datasets_obj = json.load(f)
 
+TrainList = datasets_obj['train']
+
 # Load training data
 TrainSet = APD.Dataset(
-            PatientList=datasets_obj['train'],
-            DATAPATH = DATAPATH,
+            PatientList=TrainList,
+            PATH = PATH,
             Planes=["Coronal"],
             RandomFlip = False,
             divisions=[1, 5, 10, 20])
@@ -41,7 +41,7 @@ TrainLoader = torch.utils.data.DataLoader(TrainSet, batch_size=B, collate_fn=APD
 # # Load validation data
 # ValSet = APD.Dataset(
 #             PatientList=datasets_obj['val'],
-#             DATAPATH = DATAPATH,
+#             PATH = PATH,
 #             Planes=["Coronal"],
 #             RandomFlip = False,
 #             divisions=[1, 5, 10, 20])
@@ -51,7 +51,7 @@ TrainLoader = torch.utils.data.DataLoader(TrainSet, batch_size=B, collate_fn=APD
 # # Load test data
 # TestSet = APD.Dataset(
 #             PatientList=datasets_obj['test'],
-#             DATAPATH = DATAPATH,
+#             PATH = PATH,
 #             Planes=["Coronal"],
 #             RandomFlip = False,
 #             divisions=[1, 5, 10, 20])
@@ -59,17 +59,24 @@ TrainLoader = torch.utils.data.DataLoader(TrainSet, batch_size=B, collate_fn=APD
 # TestLoader = torch.utils.data.DataLoader(TestSet, batch_size=B, collate_fn=APD.CollateFn2D(), shuffle=True)
 
 # inputs
-T = 4
-t = torch.ones((B), dtype=torch.uint8) * 4
+T = 10
+t = torch.ones((B), dtype=torch.uint8) * T
 beta = np.sqrt(0.01)
+division = 20
+division_idx = 3 # div20
 
 # training batch
 trainBatch = next(iter(TrainLoader))
 
 # run forward diffusion
 x0 = trainBatch['Images'][0]
-xT = trainBatch['Images'][3]
-x_t = APD.diffuse(t=t, T=T, x0=x0, R=(xT-x0), beta=beta, convergence_verbose=True)
+xT = trainBatch['Images'][division_idx]
+res_info = {
+    'division': division,
+    'plane': 'Coronal',
+    'patients': TrainList,
+}
+x_t = APD.diffuse(t=t, T=T, x0=x0, R=(xT-x0), beta=beta, convergence_verbose=True, res_info=res_info)
 
 vmax = max(torch.max(x0), torch.max(xT), torch.max(x_t)) / 2
 

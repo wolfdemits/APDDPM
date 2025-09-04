@@ -15,14 +15,14 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-# TODO: write docstrings: example for dataloaders: output shapes
+# TODO -: write docstrings: example for dataloaders: output shapes
 
 class APD:
-    def __init__(self, DATAPATH=pathlib.Path('./DATA')):
-        self.DATAPATH = DATAPATH
+    def __init__(self, PATH=pathlib.Path('./')):
+        self.PATH = PATH
         return
     
-    def diffuse(self, t, T, x0, R, beta, convergence_verbose=False):
+    def diffuse(self, t, T, x0, R, beta, res_info=None, convergence_verbose=False):
         """
         Apply Forward Anchored Path Diffusion Process to image.
 
@@ -51,7 +51,7 @@ class APD:
             Requested image at time vector t after forward diffusion. 
         """
 
-        # TODO make more memory efficient eg: stop at time vector
+        # TODO - make more memory efficient eg: stop at time vector
 
         device = x0.device
         # batch size
@@ -77,22 +77,30 @@ class APD:
         images = torch.zeros((T+1, B, x0.shape[1], x0.shape[2])).to(device)
         images[0,:,:,:] = x0
 
-        # TODO
         # sample epsilon: (T, B, 300, 300) (T=time) -> N samples = T*B
         # Note epsilons are already variance-normalized
-        # residualSet = APD.ResidualSet(self.DATAPATH)
-        # sampler = torch.utils.data.RandomSampler(residualSet, replacement=True)
-        # resLoader = torch.utils.data.DataLoader(residualSet, sampler=sampler, batch_size=B)
+        resIterator = None
+        if not res_info is None:
+            # use residuals, else use gaussian noise
+            residualSet = APD.ResidualSet(PatientList=res_info['patients'], plane=res_info['plane'], division=res_info['division'], PATH=self.PATH, RandomFlip=True)
+            sampler = torch.utils.data.RandomSampler(residualSet, replacement=True)
+            resLoader = torch.utils.data.DataLoader(residualSet, sampler=sampler, batch_size=B)
+            resIterator = iter(resLoader)
 
         # 1 diffusion step
         def step(xt_1, t):
+            if resIterator is None:
+                # gaussian if no resloader created
+                epsilon = torch.normal(0,1, size=xt_1.shape).to(device)
 
-            # ------------------ TEMP --------------------------------
-            epsilon = torch.normal(0,1, size=xt_1.shape).to(device)
-            # --------------------------------------------------------
-            #epsilon = next(iter(resLoader)).to(device)
+            else:
+                epsilon = next(resIterator)['Residual'].to(device)
 
-            # TODO: pad noise according to image to allow addition of noise
+            # pad noise according to image to allow addition of noise
+            W, H = xt_1.shape[1], xt_1.shape[2]
+            X, Y = epsilon.shape[1]//2, epsilon.shape[2]//2
+            
+            epsilon = epsilon[:, X - W//2 : X + (W - W//2), Y - H//2 : Y + (H - H//2)]
 
             # push everything to device
             xt = xt_1 + 1/T * R + sigma * f(t) * epsilon
@@ -117,9 +125,9 @@ class APD:
             * getitem  --> defines a dictionary with all info about a certain pair
         """
 
-        def __init__(self, PatientList, DATAPATH=pathlib.Path('./DATA_PREPROCESSED'), Planes = ["Coronal", "Sagittal", "Transax"], RandomFlip=False, divisions=[1, 5, 10, 20, 60]):
+        def __init__(self, PatientList, PATH=pathlib.Path('./'), Planes = ["Coronal", "Sagittal", "Transax"], RandomFlip=False, divisions=[1, 5, 10, 20, 60]):
             self.RandomFlip = RandomFlip
-            self.DATAPATH = DATAPATH
+            self.DATAPATH = PATH / 'DATA_PREPROCESSED'
 
             self.rng = np.random.default_rng()
 
@@ -182,9 +190,59 @@ class APD:
             return len(self.search)
         
     class ResidualSet:
-        # TODO
-        def __init__(self):
+        def __init__(self, PatientList, plane, division, PATH=pathlib.Path('./'), RandomFlip=False):
+            self.RandomFlip = RandomFlip
+            self.DATAPATH = PATH / 'RESIDUALS'
+
+            self.rng = np.random.default_rng()
+
+            self.root = zarr.open_group(str(self.DATAPATH / 'PATIENTS'), mode='r')   
+
+            self.search = []
+
+            # division
+            self.division = division
+
+            for patient in PatientList:
+                # find amount of slices
+                try:
+                    slices = self.root[patient][plane][f'div{division}'].keys()
+                except:
+                    print(bcolors.FAIL + f'Unable to find specified group: {patient} -> {plane} -> div{division}' + bcolors.ENDC)
+                    return
+                    
+                for idx in slices:
+                    self.search.append((patient, plane, division, idx))
             return
+        
+        def __getitem__(self, index):
+            # assigned random patient, plane and slice
+            patient, plane, division, slice_idx = self.search[index]
+
+            self.root = zarr.open_group(str(self.DATAPATH / 'PATIENTS'), mode='r')
+
+            try:
+                img = self.root[patient][plane]['div' + str(division)][slice_idx][:]
+            except:
+                print(bcolors.FAIL + f'Unable to find specified group: {patient} -> {plane} -> div{division} -> {slice_idx}' + bcolors.ENDC)
+                return
+
+            #convert to torch
+            Img = torch.as_tensor(img, dtype=torch.float32)
+
+            if self.RandomFlip:
+                if self.rng.random() > 0.5: # vertical flip
+                    Img = torch.flip(Img, dims=[0])
+                if self.rng.random() > 0.5: # horizontal flip
+                    Img = torch.flip(Img, dims=[1])
+
+            item = {'Residual': Img, 'division': self.division, 'Patient': patient, 'Plane': plane, 'SliceIndex': slice_idx}
+
+            return item
+
+        
+        def __len__(self):
+            return len(self.search)
         
     ## Collate function
     class CollateFn2D():

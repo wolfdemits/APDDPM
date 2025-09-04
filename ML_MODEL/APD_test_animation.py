@@ -13,10 +13,8 @@ if LOCAL:
 else:
     PATH = pathlib.Path('/kyukon/data/gent/vo/000/gvo00006/vsc48955/APDDPM')
 
-DATAPATH = PATH / 'DATA_PREPROCESSED'
-
 # init instance
-APD = APD(DATAPATH)
+APD = APD(PATH)
 
 # utility class for colored print outputs
 class bcolors:
@@ -30,7 +28,7 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-def diffuse(t, T, x0, R, beta, convergence_verbose=False):
+def diffuse(self, t, T, x0, R, beta, res_info=None, convergence_verbose=False):
     """
     Apply Forward Anchored Path Diffusion Process to image.
 
@@ -59,7 +57,7 @@ def diffuse(t, T, x0, R, beta, convergence_verbose=False):
         Requested image at time vector t after forward diffusion. 
     """
 
-    # TODO make more memory efficient eg: stop at time vector
+    # TODO - make more memory efficient eg: stop at time vector
 
     device = x0.device
     # batch size
@@ -85,20 +83,34 @@ def diffuse(t, T, x0, R, beta, convergence_verbose=False):
     images = torch.zeros((T+1, B, x0.shape[1], x0.shape[2])).to(device)
     images[0,:,:,:] = x0
 
-    # TODO
     # sample epsilon: (T, B, 300, 300) (T=time) -> N samples = T*B
     # Note epsilons are already variance-normalized
-    # residualSet = APD.ResidualSet(self.DATAPATH)
-    # sampler = torch.utils.data.RandomSampler(residualSet, replacement=True)
-    # resLoader = torch.utils.data.DataLoader(residualSet, sampler=sampler, batch_size=B)
+    resIterator = None
+    if not res_info is None:
+        # use residuals, else use gaussian noise
+        residualSet = APD.ResidualSet(PatientList=res_info['patients'], plane=res_info['plane'], division=res_info['division'], PATH = PATH, RandomFlip=True)
+        sampler = torch.utils.data.RandomSampler(residualSet, replacement=True)
+        resLoader = torch.utils.data.DataLoader(residualSet, sampler=sampler, batch_size=B)
+        resIterator = iter(resLoader)
 
     # 1 diffusion step
     def step(xt_1, t):
+        if resIterator is None:
+            # gaussian if no resloader created
+            epsilon = torch.normal(0,1, size=xt_1.shape).to(device)
 
-        # ------------------ TEMP --------------------------------
-        epsilon = torch.normal(0,1, size=xt_1.shape).to(device)
-        # --------------------------------------------------------
-        #epsilon = next(iter(resLoader)).to(device)
+        else:
+            epsilon = next(resIterator)['Residual'].to(device)
+
+        print(epsilon.shape)
+        print(xt_1.shape)
+
+        # TODO 3: pad noise according to image to allow addition of noise
+        W, H = xt_1.shape[1], xt_1.shape[2]
+        X, Y = epsilon.shape[1], epsilon.shape[2]
+        epsilon = epsilon[:,X - W//2 : X + (W - W//2) + 1, Y - H//2 : Y + (H - H//2) + 1]
+        print(epsilon.shape)
+        
 
         # push everything to device
         xt = xt_1 + 1/T * R + sigma * f(t) * epsilon
@@ -122,12 +134,12 @@ with open(PATH / 'datasets.json') as f:
 # Load training data
 TrainSet = APD.Dataset(
             PatientList=datasets_obj['train'],
-            DATAPATH = DATAPATH,
+            PATH = PATH,
             Planes=["Coronal"],
             RandomFlip = False,
             divisions=[1, 5, 10, 20])
 
-TrainLoader = torch.utils.data.DataLoader(TrainSet, batch_size=B, collate_fn=APD.CollateFn2D(), shuffle=True)
+TrainLoader = torch.utils.data.DataLoader(TrainSet, batch_size=B, collate_fn=APD.CollateFn2D(), shuffle=True, PATH=PATH)
 # -> batch output shape: (T, B, Width, Height), T=time (divisions), B=Batch
 
 # inputs

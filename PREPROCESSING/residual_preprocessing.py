@@ -37,7 +37,7 @@ root = zarr.open_group(str(outpath / 'PATIENTS'), mode='a')
 
 data_obj = {}
 
-for patient in patients[:1]: # only first 10 for local
+for patient in patients[:5]: # only first 5 for local
     print(bcolors.OKCYAN + f'Processing patient: {patient}' + bcolors.ENDC, flush=True)
     scan, divisions = datamanager.load_scan(patient)
 
@@ -99,3 +99,5 @@ with open(outpath / 'data.json', 'w') as f:
 
 # final data.json file
 print(bcolors.OKGREEN + 'Pre-processing completed' + bcolors.ENDC, flush=True)
+
+# TODO: variance normalize residuals!!!
