@@ -169,15 +169,28 @@ N = 20
 # training batch
 trainBatch = next(iter(TrainLoader))
 
+# setup device
+if torch.cuda.is_available():
+    print('Using CUDA')
+    device = torch.device('cuda')
+else:        
+    print('Using cpu')
+    device  = torch.device('cpu')
+
 # run forward diffusion
-x0 = trainBatch['Images'][0].expand(N, -1, -1)
-xT = trainBatch['Images'][division_idx].expand(N, -1, -1)
+x0 = trainBatch['Images'][0].expand(N, -1, -1).to(device)
+xT = trainBatch['Images'][division_idx].expand(N, -1, -1).to(device)
 res_info = {
     'division': division,
     'plane': 'Coronal',
     'patients': TrainList,
 }
 images = diffuse(t=t, T=T, x0=x0, R=(xT-x0), beta=beta, convergence_verbose=True, res_info=res_info)
+
+# back to cpu
+images = images.cpu()
+x0 = x0.cpu()
+xT = xT.cpu()
 
 figA, axA = plt.subplots(2, 3,figsize=(15, 10), num='Anchored Path Diffusion Visualization')
 
@@ -220,7 +233,7 @@ if LOCAL:
     plt.show()
 else:
     writervideo = animation.FFMpegWriter(fps=10)
-    filename = f'test_animation-{datetime.datetime.now().strftime("%d-%m-%Y_%H:%M:%S")}.mp4'
+    filename = f'test_animation-{datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")}.mp4'
     ani.save(str(RESULTPATH / 'APD_ANIMATION' / filename), writer=writervideo)
     plt.close()
 

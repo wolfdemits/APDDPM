@@ -322,7 +322,7 @@ class UpConv(nn.Module):
 
 #### UNET #####################################################################
 
-class UNet_withAttenGate(nn.Module):
+class UNet(nn.Module):
     
     def __init__(self, dim, num_in_channels, features_main, features_skip, conv_kernel_size, 
             dilation, down_mode, up_mode, normalization, activation, attenGate, residual_connection):
@@ -426,33 +426,3 @@ class UNet_withAttenGate(nn.Module):
         x_out = self.out_ReLU(x_out)
         
         return x_out
-
-    
-#### TEST #####################################################################
-
-if __name__ == '__main__':
-    
-    #import torchinfo
-    
-    """ CNN UNET ENCODER-DECODER """
-
-    random2Dtensor = torch.rand(32, 1, 93, 149)
-
-    gener = UNet_withAttenGate(
-        dim = '2d', 
-        num_in_channels = 1, 
-        features_main = [64, 128, 256, 512], 
-        features_skip = [64, 128, 256], 
-        conv_kernel_size = 3, 
-        dilation = 1,
-        down_mode = 'maxpool',
-        up_mode = 'upsample', 
-        normalization = 'batch_norm', 
-        activation = 'PReLU', 
-        attenGate = True, 
-        residual_connection = True)
-    
-    output = gener(random2Dtensor)
-    print(output.shape)
-    
-    #print(torchinfo.summary(gener, random2Dtensor.shape, depth=4))
