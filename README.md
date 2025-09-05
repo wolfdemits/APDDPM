@@ -26,6 +26,8 @@ Imaging.
     |_ APD.py
     |_ APD_test_animation.py
     |_ UNet.py
+    |_ training.py
+    |_ helperfunctions.py
 |_ VISUALIZATION
     |_ visualizer.py (uses ./PREPROCESSING/datamanager.py)
     |_ plotting_functions.py

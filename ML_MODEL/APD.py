@@ -157,7 +157,7 @@ class APD:
                     try:
                         slices = self.root[patient][plane]['div1'].keys()
                     except:
-                        print(bcolors.FAIL + f'Unable to find specified group: {patient} -> {plane} -> div1' + bcolors.ENDC)
+                        print(bcolors.FAIL + f'Unable to find specified group in dataset init: {patient} -> {plane} -> div1' + bcolors.ENDC)
                         return
                     
                     for idx in slices:
@@ -176,7 +176,7 @@ class APD:
                 try:
                     img = self.root[patient][plane]['div' + str(div)][slice_idx][:]
                 except:
-                    print(bcolors.FAIL + f'Unable to find specified group: {patient} -> {plane} -> div{div} -> {slice_idx}' + bcolors.ENDC)
+                    print(bcolors.FAIL + f'Unable to find specified group in dataset: {patient} -> {plane} -> div{div} -> {slice_idx}' + bcolors.ENDC)
                     break
 
                 #convert to torch
@@ -218,7 +218,7 @@ class APD:
                 try:
                     slices = self.root[patient][plane][f'div{division}'].keys()
                 except:
-                    print(bcolors.FAIL + f'Unable to find specified group: {patient} -> {plane} -> div{division}' + bcolors.ENDC)
+                    print(bcolors.FAIL + f'Unable to find specified group in residualset init: {patient} -> {plane} -> div{division}' + bcolors.ENDC)
                     return
                     
                 for idx in slices:
@@ -234,7 +234,7 @@ class APD:
             try:
                 img = self.root[patient][plane]['div' + str(division)][slice_idx][:]
             except:
-                print(bcolors.FAIL + f'Unable to find specified group: {patient} -> {plane} -> div{division} -> {slice_idx}' + bcolors.ENDC)
+                print(bcolors.FAIL + f'Unable to find specified group in residualset: {patient} -> {plane} -> div{division} -> {slice_idx}' + bcolors.ENDC)
                 return
 
             #convert to torch

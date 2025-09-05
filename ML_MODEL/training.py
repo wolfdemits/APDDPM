@@ -55,17 +55,17 @@ print(bcolors.OKBLUE + f'RUN NAME: {NAME_RUN}' + bcolors.ENDC, flush=True)
 ####################################################################################
 
 ### NETWORK PARAMETERS #############################################################
-dim = '2d', 
-num_in_channels = 1, 
-features_main = [64, 128, 256, 512], 
-features_skip = [64, 128, 256], 
-conv_kernel_size = 3, 
-dilation = 1,
-down_mode = 'maxpool',
-up_mode = 'upsample', 
-normalization = 'batch_norm', 
-activation = 'PReLU', 
-attenGate = True, 
+dim = '2d'
+num_in_channels = 1
+features_main = [64, 128, 256, 512]
+features_skip = [64, 128, 256]
+conv_kernel_size = 3
+dilation = 1
+down_mode = 'maxpool'
+up_mode = 'upsample'
+normalization = 'batch_norm'
+activation = 'PReLU'
+attenGate = True
 residual_connection = True
 
 ####################################################################################
@@ -143,6 +143,7 @@ ValSet = APD.Dataset(
 
 ValLoader = torch.utils.data.DataLoader(ValSet, batch_size=BATCH_SIZE, collate_fn=APD.CollateFn2D(), shuffle=True)
 # -> batch output shape: (T, B, Width, Height), T=time (divisions), B=Batch
+
 ####################################################################################
 
 ### CHECKPOINT SETUP/LOGIC ###############################################################
@@ -200,7 +201,8 @@ model = model.to(device)
 
 ### TRAINING ######################################################################
 no_update_since = 0
-epoch_loss = []
+epoch_val_loss = []
+epoch_train_loss = []
 
 for current_epoch in range(start_epoch, MAX_EPOCHS):
     start_time_epoch = datetime.datetime.now()
@@ -209,7 +211,7 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
     model.train()
     train_loss_per_epoch = 0
     train_batch_number = 0
-    batch_loss = []
+    train_batch_loss = []
 
     for trainBatch in TrainLoader:
         train_batch_number += 1
@@ -233,7 +235,7 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
 
         # get x_t and x_t_1 ready
         res_info = {
-            'division': DIVISION_IDX,
+            'division': divisions[DIVISION_IDX],
             'plane': 'Coronal', # for now, coronal only
             'patients': TrainList,
         }
@@ -244,8 +246,8 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
 
         if MIXED_PRECISION:
             with torch.amp.autocast('cuda'):
-                x0_hat = UNet(x_t) #, t/T, delta)  # TODO: embedding
-                x_t_1_hat = APD.diffuse(t=t-1, T=T, x0=x0_hat, R=(xT-x0_hat), beta=DIFF_BETA, res_info=res_info)
+                x0_hat = model(x_t.unsqueeze(1)) #, t/T, delta)  # TODO: embedding
+                x_t_1_hat = APD.diffuse(t=t-1, T=T, x0=x0_hat.squeeze(1), R=(xT-x0_hat.squeeze(1)), beta=DIFF_BETA, res_info=res_info)
 
                 # Loss
                 loss = loss_criterion(x_t_1, x_t_1_hat)
@@ -255,8 +257,8 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
             grad_scaler.update()
 
         else:
-            x0_hat = UNet(x_t) #, t/T, delta)  # TODO: embedding
-            x_t_1_hat = APD.diffuse(t=t-1, T=T, x0=x0_hat, R=(xT-x0_hat), beta=DIFF_BETA, res_info=res_info)
+            x0_hat = model(x_t.unsqueeze(1)) #, t/T, delta)  # TODO: embedding
+            x_t_1_hat, _ = APD.diffuse(t=t-1, T=T, x0=x0_hat.squeeze(1), R=(xT-x0_hat.squeeze(1)), beta=DIFF_BETA, res_info=res_info)
 
             # Loss
             loss = loss_criterion(x_t_1, x_t_1_hat)
@@ -266,19 +268,24 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
         #####################
 
         # update metrics
-        batch_loss.append(loss.item())
-        train_loss_per_epoch += batch_loss[-1]
+        train_batch_loss.append(loss.item())
+        train_loss_per_epoch += train_batch_loss[-1]
 
         metrics_dict = {
+            "batch": trainBatch,
             "current_batch": train_batch_number,
-            "batch_loss": batch_loss,
+            "batch_loss": train_batch_loss,
             "xt-1": x_t_1,
             "xt-1_hat": x_t_1_hat,
             "x0": x0,
             "x0_hat": x0_hat,
+            "view_slices_amount": VIEW_SLICES_AMOUNT,
+            "view_patients": VIEW_PATIENTS_TRAIN
         }
 
-        export_metrics(metrics_dict, 'train-batch')
+        FIGUREPATH = RESULTPATH / 'FIGURES' / str(NAME_RUN)
+        FIGUREPATH.mkdir(exist_ok=True)
+        export_metrics(metrics_dict, 'train-batch', FIGUREPATH=FIGUREPATH)
 
     # epoch ended
     end_time_epoch = datetime.datetime.now()
@@ -286,15 +293,17 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
     train_loss = train_loss_per_epoch / train_batch_number
 
     # update metrics
-    epoch_loss.append(train_loss)
+    epoch_train_loss.append(train_loss)
 
     metrics_dict = {
         "current_epoch": current_epoch,
-        "epoch_loss": epoch_loss,
-        "epoch_time": time_train_epoch,
+        "epoch_loss": epoch_train_loss,
+        "epoch_time": time_train_epoch
     }
 
-    export_metrics(metrics_dict, 'train-epoch')
+    FIGUREPATH = RESULTPATH / 'FIGURES' / str(NAME_RUN)
+    FIGUREPATH.mkdir(exist_ok=True)
+    export_metrics(metrics_dict, 'train-epoch', FIGUREPATH=FIGUREPATH)
 
     print(bcolors.WARNING + 'TRAINING: Epoch [{}] \t Run Time = {} \t Loss = {}'.format(current_epoch, str(time_train_epoch), round(train_loss, 6)) + bcolors.ENDC, flush=True)
 
@@ -305,7 +314,7 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
     model.eval()
     val_loss_per_epoch = 0
     val_batch_number = 0
-    batch_loss = []
+    val_batch_loss = []
 
     for valBatch in ValLoader:
         val_batch_number += 1
@@ -329,7 +338,7 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
 
         # get x_t and x_t_1 ready
         res_info = {
-            'division': DIVISION_IDX,
+            'division': divisions[DIVISION_IDX],
             'plane': 'Coronal', # for now, coronal only
             'patients': ValList,
         }
@@ -337,26 +346,31 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
 
         # disable gradient tracking
         with torch.no_grad():
-            x0_hat = UNet(x_t) #, t/T, delta)  # TODO: embedding
-            x_t_1_hat = APD.diffuse(t=t-1, T=T, x0=x0_hat, R=(xT-x0_hat), beta=DIFF_BETA, res_info=res_info)
+            x0_hat = model(x_t.unsqueeze(1)) #, t/T, delta)  # TODO: embedding
+            x_t_1_hat = APD.diffuse(t=t-1, T=T, x0=x0_hat.squeeze(1), R=(xT-x0_hat.squeeze(1)), beta=DIFF_BETA, res_info=res_info)
 
             # Loss
             loss = loss_criterion(x_t_1, x_t_1_hat)
 
         # update metrics
-        batch_loss.append(loss.item())
-        val_loss_per_epoch += batch_loss[-1]
+        val_batch_loss.append(loss.item())
+        val_loss_per_epoch += val_batch_loss[-1]
 
         metrics_dict = {
+            "batch": valBatch,
             "current_batch": val_batch_number,
-            "batch_loss": batch_loss,
+            "batch_loss": val_batch_loss,
             "xt-1": x_t_1,
             "xt-1_hat": x_t_1_hat,
             "x0": x0,
             "x0_hat": x0_hat,
+            "view_slices_amount": VIEW_SLICES_AMOUNT,
+            "view_patients": VIEW_PATIENTS_VAL
         }
 
-        export_metrics(metrics_dict, 'val-batch')
+        FIGUREPATH = RESULTPATH / 'FIGURES' / str(NAME_RUN)
+        FIGUREPATH.mkdir(exist_ok=True)
+        export_metrics(metrics_dict, 'val-batch', FIGUREPATH=FIGUREPATH)
 
     # epoch ended
     end_time_epoch = datetime.datetime.now()
@@ -367,15 +381,17 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
     scheduler.step(val_loss)
 
     # update metrics
-    epoch_loss.append(val_loss)
+    epoch_val_loss.append(val_loss)
 
     metrics_dict = {
         "current_epoch": current_epoch,
-        "epoch_loss": epoch_loss,
+        "epoch_loss": epoch_val_loss,
         "epoch_time": time_val_epoch,
     }
 
-    export_metrics(metrics_dict, 'val-epoch')
+    FIGUREPATH = RESULTPATH / 'FIGURES' / str(NAME_RUN)
+    FIGUREPATH.mkdir(exist_ok=True)
+    export_metrics(metrics_dict, 'val-epoch', FIGUREPATH=FIGUREPATH)
 
     print(bcolors.WARNING + 'VALIDATION: Epoch [{}] \t Run Time = {} \t Loss = {}'.format(current_epoch, str(time_val_epoch), round(val_loss, 6)) + bcolors.ENDC, flush=True)
 
@@ -385,6 +401,24 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
     print(bcolors.OKBLUE + 'Best Epoch [{}]'.format(epoch_best) + bcolors.ENDC, flush=True)
 
     ## COMPARE EPOCH & SAVE ##
+    epoch_obj = {
+        'inter_epoch_train_loss': train_batch_loss,
+        'inter_epoch_val_loss': val_batch_loss
+    }
+
+    # write out epoch data object
+    with open(RESULTPATH / 'EPOCH_DATA' / f'epoch_data_{current_epoch}.json', 'w') as f:
+        json.dump(epoch_obj, f)
+
+    loss_obj = {
+        'train_loss': epoch_train_loss,
+        'val_loss': epoch_val_loss
+    }
+
+    # write out loss object
+    with open(RESULTPATH / 'EPOCH_DATA' / f'loss.json', 'w') as f:
+        json.dump(epoch_obj, f)
+
     if val_loss < loss_best:
         state_best = model.state_dict()
         epoch_best = current_epoch
