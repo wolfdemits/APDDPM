@@ -17,6 +17,8 @@ class bcolors:
 
 # TODO -: write docstrings: example for dataloaders: output shapes
 
+resIterator = None
+
 class APD:
     def __init__(self, PATH=pathlib.Path('./')):
         self.PATH = PATH
@@ -80,7 +82,7 @@ class APD:
 
         # sample epsilon: (T, B, 300, 300) (T=time) -> N samples = T*B
         # Note epsilons are already variance-normalized
-        resIterator = None
+        global resIterator
         if not res_info is None:
             # use residuals, else use gaussian noise
             residualSet = APD.ResidualSet(PatientList=res_info['patients'], plane=res_info['plane'], division=res_info['division'], PATH=self.PATH, RandomFlip=True)
@@ -90,12 +92,17 @@ class APD:
 
         # 1 diffusion step
         def step(xt_1, t):
+            global resIterator
             if resIterator is None:
                 # gaussian if no resloader created
                 epsilon = torch.normal(0,1, size=xt_1.shape).to(device)
 
             else:
-                epsilon = next(resIterator)['Residual'].to(device)
+                try:
+                    epsilon = next(resIterator)['Residual'].to(device)
+                except StopIteration:
+                    resIterator = iter(resLoader)
+                    epsilon = next(resIterator)['Residual'].to(device)
 
             # pad noise according to image to allow addition of noise
             W, H = xt_1.shape[1], xt_1.shape[2]

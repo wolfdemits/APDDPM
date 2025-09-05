@@ -31,6 +31,8 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
+resIterator = None
+
 def diffuse(t, T, x0, R, beta, res_info=None, convergence_verbose=False):
     """
     Apply Forward Anchored Path Diffusion Process to image.
@@ -88,7 +90,8 @@ def diffuse(t, T, x0, R, beta, res_info=None, convergence_verbose=False):
 
     # sample epsilon: (T, B, 300, 300) (T=time) -> N samples = T*B
     # Note epsilons are already variance-normalized
-    resIterator = None
+
+    global resIterator
     if not res_info is None:
         # use residuals, else use gaussian noise
         residualSet = APD.ResidualSet(PatientList=res_info['patients'], plane=res_info['plane'], division=res_info['division'], PATH=PATH, RandomFlip=True)
@@ -98,12 +101,17 @@ def diffuse(t, T, x0, R, beta, res_info=None, convergence_verbose=False):
 
     # 1 diffusion step
     def step(xt_1, t):
+        global resIterator
         if resIterator is None:
             # gaussian if no resloader created
             epsilon = torch.normal(0,1, size=xt_1.shape).to(device)
 
         else:
-            epsilon = next(resIterator)['Residual'].to(device)
+            try:
+                epsilon = next(resIterator)['Residual'].to(device)
+            except StopIteration:
+                resIterator = iter(resLoader)
+                epsilon = next(resIterator)['Residual'].to(device)
 
         # pad noise according to image to allow addition of noise
         W, H = xt_1.shape[1], xt_1.shape[2]
@@ -144,7 +152,10 @@ TrainLoader = torch.utils.data.DataLoader(TrainSet, batch_size=B, collate_fn=APD
 # -> batch output shape: (T, B, Width, Height), T=time (divisions), B=Batch
 
 # inputs
-T = 20
+if LOCAL:
+    T = 20
+else: 
+    T = 100
 t = torch.ones((B), dtype=torch.uint8) * 4
 beta = np.sqrt(0.005)
 division = 20
@@ -153,7 +164,7 @@ division_idx = 3 # div20
 print(bcolors.OKCYAN + f'Target endpoint standard deviation (beta**2): {beta**2}' + bcolors.ENDC)
 
 # amount of samples
-N = 10
+N = 20
 
 # training batch
 trainBatch = next(iter(TrainLoader))
@@ -170,7 +181,7 @@ images = diffuse(t=t, T=T, x0=x0, R=(xT-x0), beta=beta, convergence_verbose=True
 
 figA, axA = plt.subplots(2, 3,figsize=(15, 10), num='Anchored Path Diffusion Visualization')
 
-sqdiff_arr = np.zeros(T)
+mean_sqdiff_arr = np.zeros(T)
 std_arr = np.zeros(T)
 
 def update_plot(t):
@@ -193,9 +204,9 @@ def update_plot(t):
     axA[1,0].imshow(xT[0] - images[t][0], cmap='gray_r', vmin=0, vmax=vmax)
     axA[1,0].set_title(f'difference xT and xt')
 
-    sqdiff_arr[t] = torch.sum((xT[0] - images[t][0])**2)
-    axA[1,1].plot(np.arange(len(sqdiff_arr[:t])), sqdiff_arr[:t])
-    axA[1,1].set_title(f'Sum Square difference between \n xT and xt')
+    mean_sqdiff_arr[t] = torch.sum((xT[0] - torch.mean(images[t], axis=0))**2)
+    axA[1,1].plot(np.arange(len(mean_sqdiff_arr[:t])), mean_sqdiff_arr[:t])
+    axA[1,1].set_title(f'Mean Sum Square difference between \n xT and xt')
 
     # std between samples
     std_arr[t] = torch.mean(torch.std(images[t], axis=0)**2)
@@ -208,9 +219,13 @@ ani = animation.FuncAnimation(fig=figA, func=update_plot, frames=T, interval=500
 if LOCAL:
     plt.show()
 else:
-    writervideo = animation.FFMpegWriter(fps=60)
-    ani.save(str(RESULTPATH / f'test_animation-{datetime.datetime.now().strftime("%d/%m/%Y-%H:%M:%S")}.mp4'), writer=writervideo)
+    writervideo = animation.FFMpegWriter(fps=10)
+    filename = f'test_animation-{datetime.datetime.now().strftime("%d-%m-%Y_%H:%M:%S")}.mp4'
+    ani.save(str(RESULTPATH / 'APD_ANIMATION' / filename), writer=writervideo)
     plt.close()
 
-print(bcolors.OKCYAN + f'Final sqdiff: {sqdiff_arr[-1]}' + bcolors.ENDC, flush=True)
+    print(bcolors.OKCYAN + f'Succesfully written to: {filename}' + bcolors.ENDC, flush=True)
+
+print(bcolors.OKCYAN + f'Final mean sqdiff: {mean_sqdiff_arr[-1]}' + bcolors.ENDC, flush=True)
+print(bcolors.OKCYAN + f'Final mean sqdiff per pixel: {mean_sqdiff_arr[-1] / (x0[0].shape[0] * x0[0].shape[1])}' + bcolors.ENDC, flush=True)
 print(bcolors.OKCYAN + f'Final stdev: {std_arr[-1]}' + bcolors.ENDC, flush=True)
