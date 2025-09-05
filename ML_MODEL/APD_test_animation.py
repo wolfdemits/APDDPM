@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 import pathlib
 import json
 import torch
-from matplotlib.animation import FuncAnimation
+from matplotlib import animation
+import datetime
 
 LOCAL = True
 
@@ -12,6 +13,8 @@ if LOCAL:
     PATH = pathlib.Path('./')
 else:
     PATH = pathlib.Path('/kyukon/data/gent/vo/000/gvo00006/vsc48955/APDDPM')
+
+RESULTPATH = PATH / 'RESULTS'
 
 # init instance
 APD = APD(PATH)
@@ -147,6 +150,8 @@ beta = np.sqrt(0.005)
 division = 20
 division_idx = 3 # div20
 
+print(bcolors.OKCYAN + f'Target endpoint standard deviation (beta**2): {beta**2}' + bcolors.ENDC)
+
 # amount of samples
 N = 10
 
@@ -198,9 +203,14 @@ def update_plot(t):
     axA[1,2].set_title(f'Standard deviation between \n samples of same diffusion process')
     return
 
-ani = FuncAnimation(fig=figA, func=update_plot, frames=T, interval=500, blit = False, repeat=True)
+ani = animation.FuncAnimation(fig=figA, func=update_plot, frames=T, interval=500, blit = False, repeat=True)
 
-plt.show()
+if LOCAL:
+    plt.show()
+else:
+    writervideo = animation.FFMpegWriter(fps=60)
+    ani.save(str(RESULTPATH / f'test_animation-{datetime.datetime.now().strftime("%d/%m/%Y-%H:%M:%S")}.mp4'), writer=writervideo)
+    plt.close()
 
-print(f'Final sqdiff: {sqdiff_arr[-1]}')
-print(f'Final stdev: {std_arr[-1]}')
+print(bcolors.OKCYAN + f'Final sqdiff: {sqdiff_arr[-1]}' + bcolors.ENDC, flush=True)
+print(bcolors.OKCYAN + f'Final stdev: {std_arr[-1]}' + bcolors.ENDC, flush=True)

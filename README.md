@@ -25,6 +25,7 @@ Imaging.
 |_ ML_MODEL
     |_ APD.py
     |_ APD_test_animation.py
+    |_ UNet.py
 |_ VISUALIZATION
     |_ visualizer.py (uses ./PREPROCESSING/datamanager.py)
     |_ plotting_functions.py
@@ -41,6 +42,7 @@ Imaging.
             |_ info.json
     |_ data.json
     |_ residualstats.json???
+|_ RESULTS
 |_ datasets.json
 </pre>
 
