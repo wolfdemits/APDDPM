@@ -367,8 +367,7 @@ def plot_divisions(scans, plane, slice_idx, divisions=None):
 
     return fig
 
-def view_preprocessed(id, plane, slice_idx):
-    DATAPATH = pathlib.Path('./DATA_PREPROCESSED')
+def view_preprocessed(id, plane, slice_idx, DATAPATH=pathlib.Path('./DATA_PREPROCESSED')):
 
     # root (read)
     root = zarr.open_group(str(DATAPATH / 'PATIENTS'), mode='r')
@@ -410,8 +409,7 @@ def view_preprocessed(id, plane, slice_idx):
 
     return fig
 
-def view_residual(id, plane, slice_idx):
-    DATAPATH = pathlib.Path('./RESIDUALS')
+def view_residual(id, plane, slice_idx, DATAPATH=pathlib.Path('./RESIDUALS')):
 
     # root (read)
     root = zarr.open_group(str(DATAPATH / 'PATIENTS'), mode='r')

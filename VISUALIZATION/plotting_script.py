@@ -5,8 +5,18 @@ from VISUALIZATION.plotting_functions import PlotCoordinate, plot_divisions, vie
 from PREPROCESSING.datamanager import Datamanager
 
 # path relative to terminal path
-DATAPATH=pathlib.Path('./DATA')
-PATIENT_ID = 'r001'
+LOCAL = True
+
+if LOCAL:
+    PATH = pathlib.Path('./')
+else:
+    PATH = pathlib.Path('/kyukon/data/gent/vo/000/gvo00006/vsc48955/APDDPM')
+
+RESULTPATH = PATH / 'RESULTS'
+DATAPATH = PATH / 'DATA'
+DATAPATH_PREPROCESSED = PATH / 'DATA_PREPROCESSED'
+
+PATIENT_ID = 'r177'
 
 datamanager = Datamanager(DATAPATH)
 scan, divisions = datamanager.load_scan(PATIENT_ID)
@@ -15,8 +25,12 @@ scan, divisions = datamanager.load_scan(PATIENT_ID)
 
 # fig = plot_divisions(scan, plane='Coronal', slice_idx=150, divisions=divisions)
 
-# fig = view_preprocessed('r001', 'Coronal', 0)
+fig = view_preprocessed(PATIENT_ID, 'Coronal', 100, DATAPATH=DATAPATH_PREPROCESSED)
 
-fig = view_residual('r001', 'Coronal', 100)
+# fig = view_residual('r001', 'Coronal', 100)
 
-plt.show()
+if LOCAL:
+    plt.show()
+else:
+    path = RESULTPATH / 'PLOT_SCRIPT' / PATIENT_ID
+    fig.savefig(str(path))

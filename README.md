@@ -43,6 +43,8 @@ Imaging.
     |_ data.json
     |_ residualstats.json???
 |_ RESULTS
+    |_ CHECKPOINTS
+    |_ FIGURES
 |_ datasets.json
 </pre>
 

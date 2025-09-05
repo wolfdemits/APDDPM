@@ -36,7 +36,7 @@ class APD:
         -----------
         t: torch time tensor: (B,)
             Stop forward process at time point t. (inclusive)
-            ! t cannot contain timsetps 0 or lower !
+            ! t cannot contain timsteps 0 or lower !
         T: int
             Amount of total diffusion steps in chain.
         x0: torch image tensor: (B, Width, Height)
