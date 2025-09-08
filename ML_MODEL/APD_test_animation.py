@@ -34,100 +34,100 @@ class bcolors:
 resIterator = None
 
 def diffuse(t, T, x0, R, beta, res_info=None, convergence_verbose=False):
-    """
-    Apply Forward Anchored Path Diffusion Process to image.
+        """
+        Apply Forward Anchored Path Diffusion Process to image.
 
-    Note: x0 and R should always be normalized!
+        Note: x0 and R should always be normalized!
 
-    Uses time schedule function: f(t) = 4*alpha_t(1-alpha_t), alpha_t = t/T
+        Uses time schedule function: f(t) = 4*alpha_t(1-alpha_t), alpha_t = t/T
 
-    Parameters:
-    -----------
-    t: torch time tensor: (B,)
-        Stop forward process at time point t. (inclusive)
-    T: int
-        Amount of total diffusion steps in chain.
-    x0: torch image tensor: (B, Width, Height)
-        High-Dose images (ground truth or estimate).
-    R: torch image tensor: (B, Width, Height)
-        Low-Dose images.
-    beta: float
-        End point variance.
-    convergence_verbose: Bool
-        Wether or not to print out convergence warnings. (default: False)
+        Parameters:
+        -----------
+        t: torch time tensor: (B,)
+            Stop forward process at time point t. (inclusive)
+            ! t cannot contain timsteps 0 or lower !
+        T: int
+            Amount of total diffusion steps in chain.
+        x0: torch image tensor: (B, Width, Height)
+            High-Dose images (ground truth or estimate).
+        R: torch image tensor: (B, Width, Height)
+            Low-Dose images.
+        beta: float
+            End point variance.
+        convergence_verbose: Bool
+            Wether or not to print out convergence warnings. (default: False)
 
-    Returns:
-    --------
-    xt: torch image tensor: (B, Width, Height)
-        Requested image at time vector t after forward diffusion. 
-    """
+        Returns:
+        --------
+        xt: torch image tensor: (B, Width, Height)
+            Requested image at time vector t after forward diffusion. 
+        """
 
-    # TODO - make more memory efficient eg: stop at time vector
+        # TODO - make more memory efficient eg: stop at time vector
 
-    device = x0.device
-    # batch size
-    B = x0.shape[0]
+        device = x0.device
+        # batch size
+        B = x0.shape[0]
 
-    # determine step-wise variance to reach the desired end point variance (beta)
-    sigma =  np.sqrt(15/8 * (T**3)/(T**4 - 1)) * beta
+        # determine step-wise variance to reach the desired end point variance (beta)
+        sigma =  np.sqrt(15/8 * (T**3)/(T**4 - 1)) * beta
 
-    # Noise schedule function
-    f = lambda t: 4* t/T * (1-t/T)
+        # Noise schedule function
+        f = lambda t: 4* t/T * (1-t/T)
 
-    # convergence check
-    if convergence_verbose:
-        critical_value_beta = np.sqrt(8/15 * (T**4 - 1)/(T**5))
-        print(f'{bcolors.WARNING}Critical beta value: {critical_value_beta} {bcolors.ENDC}', flush=True)
-        print(f'{bcolors.WARNING}Beta value: {beta} {bcolors.ENDC}', flush=True)
-        if (beta > critical_value_beta*10):
-            print(f'{bcolors.FAIL}Will not converge!{bcolors.ENDC}', flush=True)
-        elif (beta > critical_value_beta):
-            print(f'{bcolors.WARNING}WARN: in range of beta_crit, might not converge! (but is possible){bcolors.ENDC}', flush=True)
+        # convergence check
+        if convergence_verbose:
+            critical_value_beta = np.sqrt(8/15 * (T**4 - 1)/(T**5))
+            print(f'{bcolors.WARNING}Critical beta value: {critical_value_beta} {bcolors.ENDC}', flush=True)
+            print(f'{bcolors.WARNING}Beta value: {beta} {bcolors.ENDC}', flush=True)
+            if (beta > critical_value_beta*10):
+                print(f'{bcolors.FAIL}Will not converge!{bcolors.ENDC}', flush=True)
+            elif (beta > critical_value_beta):
+                print(f'{bcolors.WARNING}WARN: in range of beta_crit, might not converge! (but is possible){bcolors.ENDC}', flush=True)
 
-    # prepare torch tensors: (T, B, Width, Height) -> T = time axis, B = batch axis
-    images = torch.zeros((T+1, B, x0.shape[1], x0.shape[2])).to(device)
-    images[0,:,:,:] = x0
+        # prepare torch tensors: (T, B, Width, Height) -> T = time axis, B = batch axis
+        images = torch.zeros((T+1, B, x0.shape[1], x0.shape[2])).to(device)
+        images[0,:,:,:] = x0
 
-    # sample epsilon: (T, B, 300, 300) (T=time) -> N samples = T*B
-    # Note epsilons are already variance-normalized
-
-    global resIterator
-    if not res_info is None:
-        # use residuals, else use gaussian noise
-        residualSet = APD.ResidualSet(PatientList=res_info['patients'], plane=res_info['plane'], division=res_info['division'], PATH=PATH, RandomFlip=True)
-        sampler = torch.utils.data.RandomSampler(residualSet, replacement=True)
-        resLoader = torch.utils.data.DataLoader(residualSet, sampler=sampler, batch_size=B)
-        resIterator = iter(resLoader)
-
-    # 1 diffusion step
-    def step(xt_1, t):
+        # sample epsilon: (T, B, 300, 300) (T=time) -> N samples = T*B
+        # Note epsilons are already variance-normalized
         global resIterator
-        if resIterator is None:
-            # gaussian if no resloader created
-            epsilon = torch.normal(0,1, size=xt_1.shape).to(device)
+        if not res_info is None:
+            # use residuals, else use gaussian noise
+            residualSet = APD.ResidualSet(PatientList=res_info['patients'], plane=res_info['plane'], division=res_info['division'], PATH=PATH, RandomFlip=True)
+            sampler = torch.utils.data.RandomSampler(residualSet, replacement=True)
+            resLoader = torch.utils.data.DataLoader(residualSet, sampler=sampler, batch_size=B)
+            resIterator = iter(resLoader)
 
-        else:
-            try:
-                epsilon = next(resIterator)['Residual'].to(device)
-            except StopIteration:
-                resIterator = iter(resLoader)
-                epsilon = next(resIterator)['Residual'].to(device)
+        # 1 diffusion step
+        def step(xt_1, t):
+            global resIterator
+            if resIterator is None:
+                # gaussian if no resloader created
+                epsilon = torch.normal(0,1, size=xt_1.shape).to(device)
 
-        # pad noise according to image to allow addition of noise
-        W, H = xt_1.shape[1], xt_1.shape[2]
-        X, Y = epsilon.shape[1]//2, epsilon.shape[2]//2
+            else:
+                try:
+                    epsilon = next(resIterator)['Residual'].to(device)
+                except StopIteration:
+                    resIterator = iter(resLoader)
+                    epsilon = next(resIterator)['Residual'].to(device)
+
+            # pad noise according to image to allow addition of noise
+            W, H = xt_1.shape[1], xt_1.shape[2]
+            X, Y = epsilon.shape[1]//2, epsilon.shape[2]//2
+
+            epsilon = epsilon[:, X - W//2 : X + (W - W//2), Y - H//2 : Y + (H - H//2)]
+
+            # push everything to device
+            xt = xt_1 + 1/T * R + sigma * f(t) * epsilon
+            return xt
         
-        epsilon = epsilon[:, X - W//2 : X + (W - W//2), Y - H//2 : Y + (H - H//2)]
+        # run whole chain
+        for i in range(T):
+            images[i+1,:,:,:] = step(xt_1=images[i,:,:,:], t=i+1)
 
-        # push everything to device
-        xt = xt_1 + 1/T * R + sigma * f(t) * epsilon
-        return xt
-    
-    # run whole chain
-    for i in range(T):
-        images[i+1,:,:,:] = step(xt_1=images[i,:,:,:], t=i+1)
-
-    return images
+        return images
 
 # batch size
 B = 1
@@ -158,8 +158,12 @@ else:
     T = 100
 t = torch.ones((B), dtype=torch.uint8) * 4
 beta = np.sqrt(0.005)
-division = 20
-division_idx = 3 # div20
+
+divisions = [1, 5, 10, 20]
+# sample division vector
+div_idxs = np.random.randint(0, len(divisions) - 1, size=B)
+# for now: all div 20 TODO: make dynamic
+div_idxs = np.ones_like(div_idxs) * 3
 
 print(bcolors.OKCYAN + f'Target endpoint standard deviation (beta**2): {beta**2}' + bcolors.ENDC)
 
@@ -179,10 +183,16 @@ else:
 
 # run forward diffusion
 x0 = trainBatch['Images'][0].expand(N, -1, -1).to(device)
-xT = trainBatch['Images'][division_idx].expand(N, -1, -1).to(device)
+batch_idx = torch.arange(B)
+xT = trainBatch['Images'][div_idxs ,batch_idx].expand(N, -1, -1).to(device)
+
+
+# get x_t and x_t_1 ready
 res_info = {
-    'division': division,
-    'plane': 'Coronal',
+    # 'division_idxs': div_idxs,
+    # 'all_divisions': divisions,
+    'division': divisions[div_idxs[0]], # TODO: for now same div
+    'plane': 'Coronal', # for now, coronal only
     'patients': TrainList,
 }
 images = diffuse(t=t, T=T, x0=x0, R=(xT-x0), beta=beta, convergence_verbose=True, res_info=res_info)

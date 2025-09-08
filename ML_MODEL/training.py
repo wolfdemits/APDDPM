@@ -48,7 +48,7 @@ else:
     device  = torch.device('cpu')
 
 ## Run name
-NAME_RUN = 'Diffusion_' + str(datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")) 
+NAME_RUN = 'APDDPM_' + str(datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")) 
 start_time_run = datetime.datetime.now()
 print(bcolors.OKBLUE + f'RUN NAME: {NAME_RUN}' + bcolors.ENDC, flush=True)
 
@@ -75,10 +75,10 @@ residual_connection = True
 DIFF_BETA = np.sqrt(0.005)   # critical beta
 DIFF_T = 100
 divisions = [1, 5, 10, 20]
-DELTA_INV = 20                  # Division = 1/delta
-DIVISION_IDX = 3                # div20
+TEMP_DIV = 3
 
-print(bcolors.OKBLUE + f'Constant Delta: {1/divisions[DIVISION_IDX]}' + bcolors.ENDC, flush=True)
+# for now TODO: make dynamic
+print(bcolors.OKBLUE + f'Constant Delta: {1/divisions[TEMP_DIV]}' + bcolors.ENDC, flush=True)
 
 CONVERGENCE_VERBOSE = True
 
@@ -106,6 +106,8 @@ MAX_EPOCHS = 100
 
 MIXED_PRECISION = False
 
+RANDOM_FLIP = False
+
 # in case of local
 if LOCAL: BATCH_SIZE = 4
 ####################################################################################
@@ -127,10 +129,10 @@ TrainSet = APD.Dataset(
             PatientList=TrainList,
             PATH = PATH,
             Planes=planes,
-            RandomFlip = True,
+            RandomFlip = RANDOM_FLIP,
             divisions=divisions)
 
-TrainLoader = torch.utils.data.DataLoader(TrainSet, batch_size=BATCH_SIZE, collate_fn=APD.CollateFn2D(), shuffle=True)
+TrainLoader = torch.utils.data.DataLoader(TrainSet, batch_size=BATCH_SIZE, collate_fn=APD.CollateFn2D(), shuffle=True, drop_last=True)
 # -> batch output shape: (T, B, Width, Height), T=time (divisions), B=Batch
 
 # Load validation data
@@ -138,16 +140,16 @@ ValSet = APD.Dataset(
             PatientList=ValList,
             PATH = PATH,
             Planes=planes,
-            RandomFlip = True,
+            RandomFlip = RANDOM_FLIP,
             divisions=divisions)
 
-ValLoader = torch.utils.data.DataLoader(ValSet, batch_size=BATCH_SIZE, collate_fn=APD.CollateFn2D(), shuffle=True)
+ValLoader = torch.utils.data.DataLoader(ValSet, batch_size=BATCH_SIZE, collate_fn=APD.CollateFn2D(), shuffle=True, drop_last=True)
 # -> batch output shape: (T, B, Width, Height), T=time (divisions), B=Batch
 
 ####################################################################################
 
 ### CHECKPOINT SETUP/LOGIC ###############################################################
-VIEW_SLICES_AMOUNT = 10
+VIEW_SLICES = range(0,712,10)
 VIEW_PATIENTS_TRAIN = [TrainList[0]]
 VIEW_PATIENTS_VAL = [ValList[0]]
 
@@ -219,27 +221,34 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
         if (train_batch_number % 1 == 0): # DEBUG: change to 10 or something
             print(bcolors.OKCYAN + f'Train Batch number: {train_batch_number}' + bcolors.ENDC, flush=True)
 
-        # sample delta
-        # div = np.floor(rng.uniform(0,3,100000)) + 1
-        # delta = 1/divisions[div]
-        # T = f(delta)
+        # sample division vector
+        div_idxs = np.random.randint(0, len(divisions) - 1, size=BATCH_SIZE)
+
+        # for now: all div 20 TODO: make dynamic
+        div_idxs = np.ones_like(div_idxs) * TEMP_DIV
+        delta = 1/np.array(divisions)[div_idxs]
+
+        # T = f(delta) TODO: find function
         T = DIFF_T
-        delta = 1/divisions[DIVISION_IDX]
 
         # load data
         x0 = trainBatch['Images'][0].to(device)
-        xT = trainBatch['Images'][DIVISION_IDX].to(device) # for now: DIVISON_IDX constant
+
+        batch_idx = torch.arange(BATCH_SIZE)
+        xT = trainBatch['Images'][div_idxs,batch_idx].to(device)
 
         # sample time vector
         t = np.random.randint(1, T+1, size=BATCH_SIZE)
 
         # get x_t and x_t_1 ready
         res_info = {
-            'division': divisions[DIVISION_IDX],
+            # 'division_idxs': div_idxs,
+            # 'all_divisions': divisions,
+            'division': divisions[div_idxs[0]], # TODO: for now same div
             'plane': 'Coronal', # for now, coronal only
             'patients': TrainList,
         }
-        x_t, x_t_1 = APD.diffuse(t=t, T=T, x0=x0, R=(xT-x0), beta=DIFF_BETA, res_info=res_info) # for now: T constant
+        x_t, x_t_1 = APD.diffuse(t=t, T=T, x0=x0, R=(xT-x0), beta=DIFF_BETA, res_info=res_info)
 
         ## actual training ##
         optimizer.zero_grad()
@@ -247,7 +256,7 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
         if MIXED_PRECISION:
             with torch.amp.autocast('cuda'):
                 x0_hat = model(x_t.unsqueeze(1)) #, t/T, delta)  # TODO: embedding
-                x_t_1_hat = APD.diffuse(t=t-1, T=T, x0=x0_hat.squeeze(1), R=(xT-x0_hat.squeeze(1)), beta=DIFF_BETA, res_info=res_info)
+                x_t_1_hat, _ = APD.diffuse(t=t-1, T=T, x0=x0_hat.squeeze(1), R=(xT-x0_hat.squeeze(1)), beta=DIFF_BETA, res_info=res_info)
 
                 # Loss
                 loss = loss_criterion(x_t_1, x_t_1_hat)
@@ -272,6 +281,7 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
         train_loss_per_epoch += train_batch_loss[-1]
 
         metrics_dict = {
+            "epoch": current_epoch,
             "batch": trainBatch,
             "current_batch": train_batch_number,
             "batch_loss": train_batch_loss,
@@ -279,12 +289,14 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
             "xt-1_hat": x_t_1_hat,
             "x0": x0,
             "x0_hat": x0_hat,
-            "view_slices_amount": VIEW_SLICES_AMOUNT,
+            "pathfrac": t/T,
+            "delta": delta,
+            "view_slices": VIEW_SLICES,
             "view_patients": VIEW_PATIENTS_TRAIN
         }
 
         FIGUREPATH = RESULTPATH / 'FIGURES' / str(NAME_RUN)
-        FIGUREPATH.mkdir(exist_ok=True)
+        FIGUREPATH.mkdir(exist_ok=True, parents=True)
         export_metrics(metrics_dict, 'train-batch', FIGUREPATH=FIGUREPATH)
 
     # epoch ended
@@ -294,16 +306,6 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
 
     # update metrics
     epoch_train_loss.append(train_loss)
-
-    metrics_dict = {
-        "current_epoch": current_epoch,
-        "epoch_loss": epoch_train_loss,
-        "epoch_time": time_train_epoch
-    }
-
-    FIGUREPATH = RESULTPATH / 'FIGURES' / str(NAME_RUN)
-    FIGUREPATH.mkdir(exist_ok=True)
-    export_metrics(metrics_dict, 'train-epoch', FIGUREPATH=FIGUREPATH)
 
     print(bcolors.WARNING + 'TRAINING: Epoch [{}] \t Run Time = {} \t Loss = {}'.format(current_epoch, str(time_train_epoch), round(train_loss, 6)) + bcolors.ENDC, flush=True)
 
@@ -322,23 +324,30 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
         if (val_batch_number % 1 == 0): # DEBUG: change to 10 or something
             print(bcolors.OKCYAN + f'Val Batch number: {val_batch_number}' + bcolors.ENDC, flush=True)
 
-        # sample delta
-        # div = np.floor(rng.uniform(0,3,100000)) + 1
-        # delta = 1/divisions[div]
-        # T = f(delta)
+        # sample time vector
+        div_idxs = np.random.randint(0, len(divisions) - 1, size=BATCH_SIZE)
+
+        # for now: all div 20 TODO: make dynamic
+        div_idxs = np.ones_like(div_idxs) * TEMP_DIV
+        delta = 1/np.array(divisions)[div_idxs]
+
+        # T = f(delta) TODO: find function
         T = DIFF_T
-        delta = 1/divisions[DIVISION_IDX]
 
         # load data
         x0 = valBatch['Images'][0].to(device)
-        xT = valBatch['Images'][DIVISION_IDX].to(device) # for now: DIVISON_IDX constant
+
+        batch_idx = torch.arange(BATCH_SIZE)
+        xT = valBatch['Images'][div_idxs,batch_idx].to(device)
 
         # sample time vector
         t = np.random.randint(1, T+1, size=BATCH_SIZE)
 
         # get x_t and x_t_1 ready
         res_info = {
-            'division': divisions[DIVISION_IDX],
+            # 'division_idxs': div_idxs,
+            # 'all_divisions': divisions,
+            'division': divisions[div_idxs[0]], # TODO: for now same div
             'plane': 'Coronal', # for now, coronal only
             'patients': ValList,
         }
@@ -347,7 +356,7 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
         # disable gradient tracking
         with torch.no_grad():
             x0_hat = model(x_t.unsqueeze(1)) #, t/T, delta)  # TODO: embedding
-            x_t_1_hat = APD.diffuse(t=t-1, T=T, x0=x0_hat.squeeze(1), R=(xT-x0_hat.squeeze(1)), beta=DIFF_BETA, res_info=res_info)
+            x_t_1_hat, _ = APD.diffuse(t=t-1, T=T, x0=x0_hat.squeeze(1), R=(xT-x0_hat.squeeze(1)), beta=DIFF_BETA, res_info=res_info)
 
             # Loss
             loss = loss_criterion(x_t_1, x_t_1_hat)
@@ -357,6 +366,7 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
         val_loss_per_epoch += val_batch_loss[-1]
 
         metrics_dict = {
+            "epoch": current_epoch,
             "batch": valBatch,
             "current_batch": val_batch_number,
             "batch_loss": val_batch_loss,
@@ -364,12 +374,14 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
             "xt-1_hat": x_t_1_hat,
             "x0": x0,
             "x0_hat": x0_hat,
-            "view_slices_amount": VIEW_SLICES_AMOUNT,
+            "pathfrac": t/T,
+            "delta": delta,
+            "view_slices": VIEW_SLICES,
             "view_patients": VIEW_PATIENTS_VAL
         }
 
         FIGUREPATH = RESULTPATH / 'FIGURES' / str(NAME_RUN)
-        FIGUREPATH.mkdir(exist_ok=True)
+        FIGUREPATH.mkdir(exist_ok=True, parents=True)
         export_metrics(metrics_dict, 'val-batch', FIGUREPATH=FIGUREPATH)
 
     # epoch ended
@@ -384,14 +396,17 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
     epoch_val_loss.append(val_loss)
 
     metrics_dict = {
+        "epoch": current_epoch,
         "current_epoch": current_epoch,
-        "epoch_loss": epoch_val_loss,
-        "epoch_time": time_val_epoch,
+        "epoch_val_loss": epoch_val_loss,
+        "epoch_train_loss": epoch_train_loss,
+        "epoch_val_time": time_val_epoch,
+        "epoch_train_time": time_train_epoch,
     }
 
     FIGUREPATH = RESULTPATH / 'FIGURES' / str(NAME_RUN)
-    FIGUREPATH.mkdir(exist_ok=True)
-    export_metrics(metrics_dict, 'val-epoch', FIGUREPATH=FIGUREPATH)
+    FIGUREPATH.mkdir(exist_ok=True, parents=True)
+    export_metrics(metrics_dict, 'epoch-done', FIGUREPATH=FIGUREPATH)
 
     print(bcolors.WARNING + 'VALIDATION: Epoch [{}] \t Run Time = {} \t Loss = {}'.format(current_epoch, str(time_val_epoch), round(val_loss, 6)) + bcolors.ENDC, flush=True)
 
@@ -417,7 +432,7 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
 
     # write out loss object
     with open(RESULTPATH / 'EPOCH_DATA' / f'loss.json', 'w') as f:
-        json.dump(epoch_obj, f)
+        json.dump(loss_obj, f)
 
     if val_loss < loss_best:
         state_best = model.state_dict()
