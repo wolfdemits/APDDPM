@@ -86,8 +86,8 @@ class APD:
         if not res_info is None:
             # use residuals, else use gaussian noise
             residualSet = APD.ResidualSet(PatientList=res_info['patients'], plane=res_info['plane'], division=res_info['division'], PATH=self.PATH, RandomFlip=True)
-            sampler = torch.utils.data.RandomSampler(residualSet, replacement=True)
-            resLoader = torch.utils.data.DataLoader(residualSet, sampler=sampler, batch_size=B)
+            sampler = torch.utils.data.RandomSampler(residualSet, replacement=True, num_samples=10**9) # very high num_samples -> 'infinite', doesn't take up memory
+            resLoader = torch.utils.data.DataLoader(residualSet, sampler=sampler, batch_size=B, drop_last=True)
             resIterator = iter(resLoader)
 
         # 1 diffusion step
@@ -98,11 +98,7 @@ class APD:
                 epsilon = torch.normal(0,1, size=xt_1.shape).to(device)
 
             else:
-                try:
-                    epsilon = next(resIterator)['Residual'].to(device)
-                except StopIteration:
-                    resIterator = iter(resLoader)
-                    epsilon = next(resIterator)['Residual'].to(device)
+                epsilon = next(resIterator)['Residual'].to(device)
 
             # pad noise according to image to allow addition of noise
             W, H = xt_1.shape[1], xt_1.shape[2]
