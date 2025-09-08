@@ -67,6 +67,7 @@ normalization = 'batch_norm'
 activation = 'PReLU'
 attenGate = True
 residual_connection = True
+time_embed_dim = 64
 
 ####################################################################################
 
@@ -180,7 +181,8 @@ model = UNet(
     normalization = normalization, 
     activation = activation, 
     attenGate = attenGate, 
-    residual_connection = residual_connection)
+    residual_connection = residual_connection,
+    time_embed_dim=time_embed_dim)
 
 # optimizer/scheduler
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARN_RATE)
@@ -255,7 +257,7 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
 
         if MIXED_PRECISION:
             with torch.amp.autocast('cuda'):
-                x0_hat = model(x_t.unsqueeze(1)) #, t/T, delta)  # TODO: embedding
+                x0_hat = model(x_t.unsqueeze(1), torch.as_tensor(t/T).to(device), torch.as_tensor(delta).to(device))
                 x_t_1_hat, _ = APD.diffuse(t=t-1, T=T, x0=x0_hat.squeeze(1), R=(xT-x0_hat.squeeze(1)), beta=DIFF_BETA, res_info=res_info)
 
                 # Loss
@@ -266,7 +268,7 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
             grad_scaler.update()
 
         else:
-            x0_hat = model(x_t.unsqueeze(1)) #, t/T, delta)  # TODO: embedding
+            x0_hat = model(x_t.unsqueeze(1), torch.as_tensor(t/T).to(device), torch.as_tensor(delta).to(device))
             x_t_1_hat, _ = APD.diffuse(t=t-1, T=T, x0=x0_hat.squeeze(1), R=(xT-x0_hat.squeeze(1)), beta=DIFF_BETA, res_info=res_info)
 
             # Loss
@@ -355,7 +357,7 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
 
         # disable gradient tracking
         with torch.no_grad():
-            x0_hat = model(x_t.unsqueeze(1)) #, t/T, delta)  # TODO: embedding
+            x0_hat = model(x_t.unsqueeze(1), torch.as_tensor(t/T).to(device), torch.as_tensor(delta).to(device))
             x_t_1_hat, _ = APD.diffuse(t=t-1, T=T, x0=x0_hat.squeeze(1), R=(xT-x0_hat.squeeze(1)), beta=DIFF_BETA, res_info=res_info)
 
             # Loss

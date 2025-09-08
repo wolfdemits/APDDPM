@@ -1,6 +1,7 @@
 #%%
 import torch
 import torch.nn as nn
+from ML_MODEL.embedding import TimeDoseEmbedding
 
 """ This script defines the blocks and classes used to build-up the CNN model """
 
@@ -48,15 +49,25 @@ class ConvBlock(nn.Module):
 
 class DoubleConvBlock(nn.Module):
     
-    def __init__(self, dim, in_channel, mid_channel, out_channel, conv_kernel, dilation, normalization, activation):
+    def __init__(self, dim, in_channel, mid_channel, out_channel, conv_kernel, dilation, normalization, activation, time_embed_dim=None):
         
         super().__init__()
         
         self.conv1 = ConvBlock(dim, in_channel, mid_channel, conv_kernel, dilation, normalization, activation)
         self.conv2 = ConvBlock(dim, mid_channel, out_channel, conv_kernel, dilation, normalization, activation)
+
+        # time embedding
+        if time_embed_dim is not None:
+            self.time_proj = nn.Linear(time_embed_dim, mid_channel)
+        else:
+            self.time_proj = None
         
-    def forward(self, x):
+    def forward(self, x, t_emb=None):
         x = self.conv1(x)
+        if self.time_proj is not None and t_emb is not None:
+            t_projected = self.time_proj(t_emb).unsqueeze(-1).unsqueeze(-1) # (B,C,1,1) -> broadcast across channels (= channel modulator)
+            x = x + t_projected
+
         x = self.conv2(x)
         return x
 
@@ -80,7 +91,7 @@ class Conv_1x1(nn.Module):
 
 class DownBlock_Pool(nn.Module):
     
-    def __init__(self, dim, in_channel, out_channel, conv_kernel, dilation, pool_mode, normalization, activation):
+    def __init__(self, dim, in_channel, out_channel, conv_kernel, dilation, pool_mode, normalization, activation, time_embed_dim=None):
         
         super().__init__()
         
@@ -89,17 +100,19 @@ class DownBlock_Pool(nn.Module):
         elif pool_mode == 'meanpool':
             pool_operation = nn.AvgPool2d if dim == '2d' else nn.AvgPool3d
         
-        double_conv = DoubleConvBlock(dim, in_channel, out_channel, out_channel, conv_kernel, dilation, normalization, activation)
-        self.down = nn.Sequential(pool_operation(2), double_conv)
+        self.double_conv = DoubleConvBlock(dim, in_channel, out_channel, out_channel, conv_kernel, dilation, normalization, activation, time_embed_dim)
+        self.pool = pool_operation(2)
 
-    def forward(self, x):
-        return self.down(x)
+    def forward(self, x, t_emb=None):
+        x = self.pool(x)
+        x = self.double_conv(x, t_emb)
+        return x
 
 
 ## Strided Conv. 
 class DownBlock_ConvStride2(nn.Module):
     
-    def __init__(self, dim, in_channel, out_channel, conv_kernel, dilation, normalization, activation):
+    def __init__(self, dim, in_channel, out_channel, conv_kernel, dilation, normalization, activation, time_embed_dim=None):
         
         super().__init__()
 
@@ -116,11 +129,11 @@ class DownBlock_ConvStride2(nn.Module):
             getattr(nn, activation)())
         
         self.double_conv = DoubleConvBlock(
-            dim, in_channel, out_channel, out_channel, conv_kernel, dilation, normalization, activation)
+            dim, in_channel, out_channel, out_channel, conv_kernel, dilation, normalization, activation, time_embed_dim)
        
-    def forward(self, x):
+    def forward(self, x, t_emb=None):
         x = self.down(x)
-        x = self.double_conv(x)
+        x = self.double_conv(x, t_emb)
         return x
 
 
@@ -222,7 +235,7 @@ class UpSample(nn.Module):
     
     def __init__(
             self, dim, num_main_channel, num_skip_channel, num_channel_out, conv_kernel, 
-            dilation, normalization, activation, attenGate):
+            dilation, normalization, activation, attenGate, time_embed_dim=None):
         
         super().__init__()
 
@@ -249,11 +262,10 @@ class UpSample(nn.Module):
         if self.attenGate: 
             self.attenBlock = AttentionBlock(dim, num_skip_channel, num_main_channel)
         
-        self.double_conv = DoubleConvBlock(dim, in_channel, mid_channel, out_channel, conv_kernel, dilation, normalization, activation)
+        self.double_conv = DoubleConvBlock(dim, in_channel, mid_channel, out_channel, conv_kernel, dilation, normalization, activation, time_embed_dim)
     
     
-    def forward(self, x, x_encode):
-
+    def forward(self, x, x_encode, t_emb=None):
         x_up = self.up(x)
 
         if (self.skip_connection) and (self.attenGate):         # concatenate with attention gating
@@ -263,7 +275,7 @@ class UpSample(nn.Module):
         elif (self.skip_connection) and not (self.attenGate):   # only concatenation
             x = concat_skipConnection(self.dim, x_out_skip=x_encode, x_decode=x_up)
 
-        x = self.double_conv(x)
+        x = self.double_conv(x, t_emb)
         
         return x
 
@@ -272,7 +284,7 @@ class UpConv(nn.Module):
     
     def __init__(
             self, dim, num_main_channel, num_skip_channel, num_channel_out, conv_kernel, 
-            dilation, normalization, activation, attenGate):
+            dilation, normalization, activation, attenGate, time_embed_dim=None):
     
         super().__init__()
 
@@ -300,10 +312,10 @@ class UpConv(nn.Module):
             self.attenBlock = AttentionBlock(dim, num_skip_channel, num_main_channel)
 
         self.double_conv = DoubleConvBlock(
-            dim, in_channel, mid_channel, out_channel, conv_kernel, dilation, normalization, activation)
+            dim, in_channel, mid_channel, out_channel, conv_kernel, dilation, normalization, activation, time_embed_dim)
 
     
-    def forward(self, x, x_encode):
+    def forward(self, x, x_encode, t_emb=None):
         
         x_up = self.up(x)
 
@@ -314,7 +326,7 @@ class UpConv(nn.Module):
         elif (self.skip_connection) and not (self.attenGate):   # only concatenation
             x = concat_skipConnection(self.dim, x_out_skip=x_encode, x_decode=x_up)
 
-        x = self.double_conv(x)
+        x = self.double_conv(x, t_emb)
 
         return x
       
@@ -325,7 +337,7 @@ class UpConv(nn.Module):
 class UNet(nn.Module):
     
     def __init__(self, dim, num_in_channels, features_main, features_skip, conv_kernel_size, 
-            dilation, down_mode, up_mode, normalization, activation, attenGate, residual_connection):
+            dilation, down_mode, up_mode, normalization, activation, attenGate, residual_connection, time_embed_dim = 64):
         
         super().__init__()
         
@@ -333,10 +345,18 @@ class UNet(nn.Module):
         self.depth = len(features_skip)
         self.num_in_channels = num_in_channels
         self.residual_connection = residual_connection
+
+        self.time_embed_dim = time_embed_dim
+        self.PE = TimeDoseEmbedding(self.time_embed_dim)
+        self.time_embed_MLP = nn.Sequential(
+            nn.modules.Linear(time_embed_dim, time_embed_dim),
+            nn.modules.SiLU(),
+            nn.modules.Linear(time_embed_dim, features_main[0]),
+        )
         
         # INCOME, FIRST LAYERS
         self.income = DoubleConvBlock(
-            dim, num_in_channels, features_main[0], features_main[0], conv_kernel_size, dilation, normalization, activation)
+            dim, num_in_channels, features_main[0], features_main[0], conv_kernel_size, dilation, normalization, activation, time_embed_dim)
         
         # DOWN PART
         if (down_mode == 'maxpool') or (down_mode == 'meanpool'):
@@ -348,7 +368,8 @@ class UNet(nn.Module):
                                         dilation,
                                         down_mode,
                                         normalization,
-                                        activation)
+                                        activation, 
+                                        time_embed_dim)
                                 for i in range(self.depth)])
 
         elif (down_mode == 'convStrided'):
@@ -359,7 +380,8 @@ class UNet(nn.Module):
                                         conv_kernel_size,
                                         dilation, 
                                         normalization, 
-                                        activation)
+                                        activation, 
+                                        time_embed_dim)
                                 for i in range(self.depth)])
         
         # UP PART
@@ -373,7 +395,8 @@ class UNet(nn.Module):
                                      dilation,
                                      normalization, 
                                      activation, 
-                                     attenGate)
+                                     attenGate, 
+                                     time_embed_dim)
                             for i in reversed(range(self.depth))])
         
         elif (up_mode == 'upconv'):
@@ -386,7 +409,8 @@ class UNet(nn.Module):
                                    dilation, 
                                    normalization,
                                    activation, 
-                                   attenGate)
+                                   attenGate,
+                                   time_embed_dim)
                             for i in reversed(range(self.depth))])
         
         # OUT: Conv1x1 && Add ReLU (enforce non-negativity)
@@ -394,7 +418,14 @@ class UNet(nn.Module):
         self.out_ReLU = getattr(nn, 'ReLU')()
     
     
-    def forward(self, x_input):
+    def forward(self, x_input, alpha=None, delta=None):
+        if alpha is not None and delta is not None:
+            # time embedding
+            MAX_PERIOD = 1000
+            PE = self.PE(alpha*MAX_PERIOD, 1/delta, max_period=MAX_PERIOD)
+            t_emb = self.time_embed_MLP(PE) #(B, time_embed_dim)
+        else:
+            t_emb = None
         
         x = self.income(x_input)
         
@@ -402,10 +433,10 @@ class UNet(nn.Module):
 
         for encode_block in self.Downs:
             save_skip.append(x)
-            x = encode_block(x)
+            x = encode_block(x, t_emb)
             
         for decode_block in self.Ups:
-            x = decode_block(x, save_skip.pop())
+            x = decode_block(x, save_skip.pop(), t_emb)
             
         x = self.out_Conv1x1(x)
         x = resizePadding(self.dim, x_to_resize=x, x_reference=x_input)

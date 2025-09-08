@@ -28,6 +28,7 @@ Imaging.
     |_ UNet.py
     |_ training.py
     |_ helperfunctions.py
+    |_ embedding.py
 |_ VISUALIZATION
     |_ visualizer.py (uses ./PREPROCESSING/datamanager.py)
     |_ plotting_functions.py

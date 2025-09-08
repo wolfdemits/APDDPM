@@ -36,7 +36,7 @@ else:
 
 random2Dtensor = torch.rand(32, 1, 93, 149)
 
-gener = UNet(
+model = UNet(
     dim = '2d', 
     num_in_channels = 1, 
     features_main = [64, 128, 256, 512], 
@@ -50,7 +50,11 @@ gener = UNet(
     attenGate = True, 
     residual_connection = True)
 
-output = gener(random2Dtensor)
+# dummy alpha and delta
+alpha = torch.as_tensor([0.5])
+delta = torch.as_tensor([0.05])
+
+output = model(random2Dtensor, alpha, delta)
 print(output.shape)
 
 filename = f'UNet_test-{datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")}.png'
