@@ -173,18 +173,20 @@ class APD:
 
                 #convert to torch
                 Img = torch.as_tensor(img, dtype=torch.float32)
-
-                if self.RandomFlip:
-                    if self.rng.random() > 0.5: # vertical flip
-                        Img = torch.flip(Img, dims=[0])
-                    if self.rng.random() > 0.5: # horizontal flip
-                        Img = torch.flip(Img, dims=[1])
-
                 images.append(Img)
 
             images = torch.stack(images)
 
-            item = {'Images': images, 'Divisions': self.divisions, 'Patient': patient, 'Plane': plane, 'SliceIndex': slice_idx}
+            if self.RandomFlip:
+                flip = (0,0)
+                if self.rng.random() > 0.5: # vertical flip
+                    flip = (1, flip[1])
+                    images = torch.flip(images, dims=[1])
+                if self.rng.random() > 0.5: # horizontal flip
+                    flip = (flip[0], 1)
+                    images = torch.flip(images, dims=[2])
+
+            item = {'Images': images, 'Divisions': self.divisions, 'Patient': patient, 'Plane': plane, 'SliceIndex': slice_idx, 'Flip': flip}
 
             return item
 

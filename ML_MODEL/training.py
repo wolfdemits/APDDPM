@@ -220,7 +220,7 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
     for trainBatch in TrainLoader:
         train_batch_number += 1
 
-        if (train_batch_number % 1 == 0): # DEBUG: change to 10 or something
+        if (train_batch_number % 1 == 0):
             print(bcolors.OKCYAN + f'Train Batch number: {train_batch_number}' + bcolors.ENDC, flush=True)
 
         # sample division vector
