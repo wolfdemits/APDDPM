@@ -152,7 +152,7 @@ ValLoader = torch.utils.data.DataLoader(ValSet, batch_size=BATCH_SIZE, collate_f
 ### CHECKPOINT SETUP/LOGIC ###############################################################
 VIEW_SLICES = range(0,712,10)
 VIEW_PATIENTS_TRAIN = [TrainList[0]]
-VIEW_PATIENTS_VAL = [ValList[0]]
+VIEW_PATIENTS_VAL = [ValList[0], ValList[-1]]
 
 if not CHECKPOINT is None:
     print(bcolors.OKBLUE + f'Continuing from checkpoint: {CHECKPOINT}', flush=True)
@@ -289,6 +289,8 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
             "batch_loss": train_batch_loss,
             "xt-1": x_t_1,
             "xt-1_hat": x_t_1_hat,
+            "xt": x_t,
+            "xT": xT,
             "x0": x0,
             "x0_hat": x0_hat,
             "pathfrac": t/T,
@@ -323,7 +325,7 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
     for valBatch in ValLoader:
         val_batch_number += 1
 
-        if (val_batch_number % 1 == 0): # DEBUG: change to 10 or something
+        if (val_batch_number % 1 == 0):
             print(bcolors.OKCYAN + f'Val Batch number: {val_batch_number}' + bcolors.ENDC, flush=True)
 
         # sample time vector
@@ -376,6 +378,8 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
             "xt-1_hat": x_t_1_hat,
             "x0": x0,
             "x0_hat": x0_hat,
+            "xt": x_t,
+            "xT": xT,
             "pathfrac": t/T,
             "delta": delta,
             "view_slices": VIEW_SLICES,
@@ -415,7 +419,6 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
     ## END OF EPOCH ##
     total_run_time = datetime.datetime.now() - start_time_run
     print(bcolors.OKGREEN + '##### EPOCH [{}] COMPLETED -- Run Time = {}'.format(current_epoch, str(total_run_time)) + bcolors.ENDC, flush=True)
-    print(bcolors.OKBLUE + 'Best Epoch [{}]'.format(epoch_best) + bcolors.ENDC, flush=True)
 
     ## COMPARE EPOCH & SAVE ##
     epoch_obj = {
@@ -424,7 +427,9 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
     }
 
     # write out epoch data object
-    with open(RESULTPATH / 'EPOCH_DATA' / f'epoch_data_{current_epoch}.json', 'w') as f:
+    path = RESULTPATH / 'EPOCH_DATA'
+    path.mkdir(exist_ok=True, parents=True)
+    with open(path / f'epoch_data_{current_epoch}.json', 'w') as f:
         json.dump(epoch_obj, f)
 
     loss_obj = {
@@ -433,7 +438,9 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
     }
 
     # write out loss object
-    with open(RESULTPATH / 'EPOCH_DATA' / f'loss.json', 'w') as f:
+    path = RESULTPATH / 'EPOCH_DATA'
+    path.mkdir(exist_ok=True, parents=True)
+    with open(path / f'loss.json', 'w') as f:
         json.dump(loss_obj, f)
 
     if val_loss < loss_best:
@@ -453,8 +460,9 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict()}
         
-        path = RESULTPATH / 'CHECKPOINTS' / '{}.pt'.format(NAME_RUN)
-        torch.save(checkpoint, path)
+        path = RESULTPATH / 'CHECKPOINTS'
+        path.mkdir(exist_ok=True, parents=True)
+        torch.save(checkpoint, path / '{}.pt'.format(NAME_RUN))
         print(bcolors.OKBLUE + f'Saved current epoch checkpoint to {path}' + bcolors.ENDC, flush=True)
 
         # reset early stopping counter
@@ -462,6 +470,8 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
     else:
         # increment early stopping counter
         no_update_since += 1
+
+    print(bcolors.OKBLUE + 'Best Epoch [{}]'.format(epoch_best) + bcolors.ENDC, flush=True)
 
     ## EARLY STOPPING ##
     if current_epoch > 2:
