@@ -5,6 +5,9 @@ DATA_PREPROCESSED
 Testing
 VISUALIZATION/reload.py
 ML_MODEL/dataloader-test.ipynb
+ML_MODEL/APD_temp.py
+ML_MODEL/APD_old.py
+ML_MODEL/resloader_test.py
 ML_MODEL/__pycache__
 ML_MODEL/.ipynb_checkpoints
 PREPROCESSING/cropping_test.py

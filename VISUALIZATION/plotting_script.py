@@ -16,7 +16,7 @@ RESULTPATH = PATH / 'RESULTS'
 DATAPATH = PATH / 'DATA'
 DATAPATH_PREPROCESSED = PATH / 'DATA_PREPROCESSED'
 
-PATIENT_ID = 'r177'
+PATIENT_ID = 'r001'
 
 datamanager = Datamanager(DATAPATH)
 scan, divisions = datamanager.load_scan(PATIENT_ID)
@@ -25,9 +25,9 @@ scan, divisions = datamanager.load_scan(PATIENT_ID)
 
 # fig = plot_divisions(scan, plane='Coronal', slice_idx=150, divisions=divisions)
 
-fig = view_preprocessed(PATIENT_ID, 'Coronal', 100, DATAPATH=DATAPATH_PREPROCESSED)
+# fig = view_preprocessed(PATIENT_ID, 'Coronal', 100, DATAPATH=DATAPATH_PREPROCESSED)
 
-# fig = view_residual('r001', 'Coronal', 100)
+fig = view_residual('r001', 'Sagittal', 100)
 
 if LOCAL:
     plt.show()

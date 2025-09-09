@@ -123,7 +123,7 @@ with open(PATH / 'datasets.json') as f:
 TrainList = datasets_obj['train']
 ValList = datasets_obj['val']
 
-planes = ["Coronal"]
+planes = ["Coronal", "Sagittal"]
 
 # Load training data
 TrainSet = APD.Dataset(
@@ -224,7 +224,7 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
             print(bcolors.OKCYAN + f'Train Batch number: {train_batch_number}' + bcolors.ENDC, flush=True)
 
         # sample division vector
-        div_idxs = np.random.randint(0, len(divisions) - 1, size=BATCH_SIZE)
+        div_idxs = np.random.randint(1, len(divisions) - 1, size=BATCH_SIZE)
 
         # for now: all div 20 TODO: make dynamic
         div_idxs = np.ones_like(div_idxs) * TEMP_DIV
@@ -238,17 +238,19 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
 
         batch_idx = torch.arange(BATCH_SIZE)
         xT = trainBatch['Images'][div_idxs,batch_idx].to(device)
+        batch_planes = trainBatch['Plane']
 
         # sample time vector
         t = np.random.randint(1, T+1, size=BATCH_SIZE)
 
         # get x_t and x_t_1 ready
         res_info = {
-            # 'division_idxs': div_idxs,
-            # 'all_divisions': divisions,
-            'division': divisions[div_idxs[0]], # TODO: for now same div
-            'plane': 'Coronal', # for now, coronal only
+            'division_idxs': div_idxs,
+            'all_divisions': divisions,
+            'batch_planes': batch_planes,
+            'all_planes': planes,
             'patients': TrainList,
+            'random_flip': True,
         }
         x_t, x_t_1 = APD.diffuse(t=t, T=T, x0=x0, R=(xT-x0), beta=DIFF_BETA, res_info=res_info)
 
@@ -329,7 +331,7 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
             print(bcolors.OKCYAN + f'Val Batch number: {val_batch_number}' + bcolors.ENDC, flush=True)
 
         # sample time vector
-        div_idxs = np.random.randint(0, len(divisions) - 1, size=BATCH_SIZE)
+        div_idxs = np.random.randint(1, len(divisions) - 1, size=BATCH_SIZE)
 
         # for now: all div 20 TODO: make dynamic
         div_idxs = np.ones_like(div_idxs) * TEMP_DIV
@@ -343,17 +345,19 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
 
         batch_idx = torch.arange(BATCH_SIZE)
         xT = valBatch['Images'][div_idxs,batch_idx].to(device)
+        batch_planes = valBatch['Plane']
 
         # sample time vector
         t = np.random.randint(1, T+1, size=BATCH_SIZE)
 
         # get x_t and x_t_1 ready
         res_info = {
-            # 'division_idxs': div_idxs,
-            # 'all_divisions': divisions,
-            'division': divisions[div_idxs[0]], # TODO: for now same div
-            'plane': 'Coronal', # for now, coronal only
-            'patients': ValList,
+            'division_idxs': div_idxs,
+            'all_divisions': divisions,
+            'batch_planes': batch_planes,
+            'all_planes': planes,
+            'patients': TrainList,
+            'random_flip': RANDOM_FLIP,
         }
         x_t, x_t_1 = APD.diffuse(t=t, T=T, x0=x0, R=(xT-x0), beta=DIFF_BETA, res_info=res_info) # for now: T constant
 

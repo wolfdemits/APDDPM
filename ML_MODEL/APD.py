@@ -82,23 +82,19 @@ class APD:
 
         # sample epsilon: (T, B, 300, 300) (T=time) -> N samples = T*B
         # Note epsilons are already variance-normalized
-        global resIterator
         if not res_info is None:
-            # use residuals, else use gaussian noise
-            residualSet = APD.ResidualSet(PatientList=res_info['patients'], plane=res_info['plane'], division=res_info['division'], PATH=self.PATH, RandomFlip=True)
-            sampler = torch.utils.data.RandomSampler(residualSet, replacement=True, num_samples=10**9) # very high num_samples -> 'infinite', doesn't take up memory
-            resLoader = torch.utils.data.DataLoader(residualSet, sampler=sampler, batch_size=B, drop_last=True)
-            resIterator = iter(resLoader)
+            mrds = APD.MultiResidualDataSet(res_info=res_info, BATCH_SIZE=B, PATH=self.PATH)
+            mrdl = iter(torch.utils.data.DataLoader(mrds, batch_size=None, collate_fn=APD.CollateFn2D()))
 
         # 1 diffusion step
         def step(xt_1, t):
-            global resIterator
-            if resIterator is None:
+            if res_info is None:
                 # gaussian if no resloader created
                 epsilon = torch.normal(0,1, size=xt_1.shape).to(device)
 
             else:
-                epsilon = next(resIterator)['Residual'].to(device)
+                batch = next(mrdl)
+                epsilon = batch['Residual'].to(device)
 
             # pad noise according to image to allow addition of noise
             W, H = xt_1.shape[1], xt_1.shape[2]
@@ -188,7 +184,7 @@ class APD:
 
             images = torch.stack(images)
 
-            item = {'Images': images, 'divisions': self.divisions, 'Patient': patient, 'Plane': plane, 'SliceIndex': slice_idx}
+            item = {'Images': images, 'Divisions': self.divisions, 'Patient': patient, 'Plane': plane, 'SliceIndex': slice_idx}
 
             return item
 
@@ -242,13 +238,54 @@ class APD:
                 if self.rng.random() > 0.5: # horizontal flip
                     Img = torch.flip(Img, dims=[1])
 
-            item = {'Residual': Img, 'division': self.division, 'Patient': patient, 'Plane': plane, 'SliceIndex': slice_idx}
+            item = {'Residual': Img, 'Division': self.division, 'Patient': patient, 'Plane': plane, 'SliceIndex': slice_idx}
 
             return item
 
         
         def __len__(self):
             return len(self.search)
+        
+    class MultiResidualDataSet:
+        def __init__(self, res_info, BATCH_SIZE, PATH=pathlib.Path('./'),):
+            patientList = res_info['patients']
+            self.divisions = res_info['all_divisions']
+            self.planes = res_info['all_planes']
+            self.batch_planes = res_info['batch_planes']
+            self.div_idxs = res_info['division_idxs']
+            RANDOM_FLIP = res_info['random_flip']
+            self.BATCH_SIZE = BATCH_SIZE
+            self.PATH = PATH
+
+            assert len(self.batch_planes) == BATCH_SIZE, "plane vector length must match batch size"
+            assert len(self.div_idxs) == BATCH_SIZE, "division index vector length must match batch size"
+
+            # put ready dataloaders + datasamplers
+            self.samplers = {}
+            self.datasets = {}
+
+            for plane in self.planes:
+                self.samplers[plane] = {}
+                self.datasets[plane] = {}
+                for division in self.divisions[1:]:
+                    residualSet = APD.ResidualSet(PatientList=patientList, plane=plane, division=division, PATH=self.PATH, RandomFlip=RANDOM_FLIP)
+                    sampler = torch.utils.data.RandomSampler(residualSet, replacement=True, num_samples=10**9) # very high num_samples -> 'infinite', doesn't take up memory
+                    self.samplers[plane][division] = iter(sampler)
+                    self.datasets[plane][division] = residualSet
+
+        def __len__(self):
+            # for all purposes 'infinite'
+            return 10**9
+
+        def __getitem__(self, _):
+            # sample from correct datasets according to self.planes and self.div_idxs
+            batch = []
+            for b in range(self.BATCH_SIZE):
+                idx = next(self.samplers[self.batch_planes[b]][self.divisions[self.div_idxs[b]]])
+                batch.append(self.datasets[self.batch_planes[b]][self.divisions[self.div_idxs[b]]][idx])
+
+            return batch
+
         
     ## Collate function
     class CollateFn2D():
@@ -290,9 +327,15 @@ class APD:
                     
                     # Add stacked & padded tensor data to batch dictionary using the exsisting key
                     batch[key] = torch.transpose(tensor, 0,1)
+
+                elif key == 'Residual':
+                    tensor_list = [item[key] for item in item_list]
+                    tensor = torch.stack(tensor_list)
+                    
+                    batch[key] = tensor
                 
                 else:
-                    # If key is something other than 'LR_Img' or 'HR_Img' --> Merge data of all items in a list using stack command and add to batch
+                    # If key is something other than 'Images' or 'Residual' --> Merge data of all items in a list using stack command and add to batch
                     batch[key] = np.stack([item[key] for item in item_list])
 
             return batch

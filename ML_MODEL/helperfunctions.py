@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
+loss_criterion = torch.nn.MSELoss()
+
 def export_metrics(metrics_dict, type, FIGUREPATH, VMAX_FRAC=0.5):
     if type == 'train-batch':
         # plot loss
@@ -41,6 +43,11 @@ def export_metrics(metrics_dict, type, FIGUREPATH, VMAX_FRAC=0.5):
                     idx = slice_idxs[i]
 
                     if int(idx) in list(slices):
+                        # loss
+                        with torch.no_grad():
+                            loss = loss_criterion(x_t_1[i], x_t_1_hat[i])
+                            loss = loss.item()
+
                         img1 = xt[i].squeeze().cpu()
                         img2 = x_t_1_hat[i].squeeze().cpu()
                         img3 = x_t_1[i].squeeze().cpu()
@@ -67,7 +74,7 @@ def export_metrics(metrics_dict, type, FIGUREPATH, VMAX_FRAC=0.5):
 
                         path = FIGUREPATH / 'TRAIN' / f'epoch{epoch}' / f'{plane}' / f'{patient}'
                         path.mkdir(exist_ok=True, parents=True)
-                        fig.suptitle(f'Example train images: epoch {epoch}, batch {current_batch}, patient {patient}, slice: {idx}, \n timestep fraction: {alpha[i]}, dose delta: {delta[i]}')
+                        fig.suptitle(f'Example train images: epoch {epoch}, batch {current_batch}, patient {patient}, slice: {idx}, \n timestep fraction: {alpha[i]}, dose delta: {delta[i]}, loss: {loss:.4f}')
                         fig.savefig(str(path  / f'{idx}.png'))
                         plt.close()
 
@@ -85,6 +92,8 @@ def export_metrics(metrics_dict, type, FIGUREPATH, VMAX_FRAC=0.5):
         x_t_1_hat = metrics_dict['xt-1_hat']
         x0 = metrics_dict['x0']
         x0_hat = metrics_dict['x0_hat']
+        xt = metrics_dict['xt']
+        xT = metrics_dict['xT']
 
         patients = batch['Patient']
         planes = batch['Plane']
@@ -106,6 +115,11 @@ def export_metrics(metrics_dict, type, FIGUREPATH, VMAX_FRAC=0.5):
                     idx = slice_idxs[i]
 
                     if int(idx) in list(slices):
+                        # loss
+                        with torch.no_grad():
+                            loss = loss_criterion(x_t_1[i], x_t_1_hat[i])
+                            loss = loss.item()
+
                         img1 = xt[i].squeeze().cpu()
                         img2 = x_t_1_hat[i].squeeze().cpu()
                         img3 = x_t_1[i].squeeze().cpu()
@@ -131,7 +145,7 @@ def export_metrics(metrics_dict, type, FIGUREPATH, VMAX_FRAC=0.5):
 
                         path = FIGUREPATH / 'VAL' / f'epoch{epoch}' / f'{plane}' / f'{patient}'
                         path.mkdir(exist_ok=True, parents=True)
-                        fig.suptitle(f'Example val images: epoch {epoch}, batch {current_batch}, patient {patient}, slice: {idx}, \n timestep fraction: {alpha[i]}, dose delta: {delta[i]}')
+                        fig.suptitle(f'Example val images: epoch {epoch}, batch {current_batch}, patient {patient}, slice: {idx}, \n timestep fraction: {alpha[i]}, dose delta: {delta[i]}, loss: {loss:.4f}')
                         fig.savefig(str(path / f'{idx}.png'))
                         plt.close()
 
