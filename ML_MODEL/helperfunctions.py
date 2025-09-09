@@ -4,7 +4,7 @@ import torch
 
 loss_criterion = torch.nn.MSELoss()
 
-def export_metrics(metrics_dict, type, FIGUREPATH, VMAX_FRAC=0.5):
+def export_metrics(metrics_dict, type, FIGUREPATH, VMAX_PERCENTILE=99):
     if type == 'train-batch':
         # plot loss
         batch_loss = metrics_dict['batch_loss']
@@ -26,6 +26,7 @@ def export_metrics(metrics_dict, type, FIGUREPATH, VMAX_FRAC=0.5):
         patients = batch['Patient']
         planes = batch['Plane']
         slice_idxs = batch['SliceIndex']
+        flip = metrics_dict['flip']
 
         # loss plots
         fig, ax = plt.subplots(1, 1, figsize=(5, 5))
@@ -38,45 +39,60 @@ def export_metrics(metrics_dict, type, FIGUREPATH, VMAX_FRAC=0.5):
 
         # plot slices
         for i, patient in enumerate(patients):
-            for plane in planes:
-                if patient in view_patients:
-                    idx = slice_idxs[i]
+            if patient in view_patients:
+                idx = slice_idxs[i]
 
-                    if int(idx) in list(slices):
-                        # loss
-                        with torch.no_grad():
-                            loss = loss_criterion(x_t_1[i], x_t_1_hat[i])
-                            loss = loss.item()
+                if int(idx) in list(slices):
+                    # loss
+                    with torch.no_grad():
+                        loss = loss_criterion(x_t_1[i], x_t_1_hat[i])
+                        loss = loss.item()
 
-                        img1 = xt[i].squeeze().cpu()
-                        img2 = x_t_1_hat[i].squeeze().cpu()
-                        img3 = x_t_1[i].squeeze().cpu()
-                        img4 = x0_hat[i].squeeze().cpu()
-                        img5 = x0[i].squeeze().cpu()
-                        img6 = xT[i].squeeze().cpu()
+                    img1 = xt[i].squeeze().cpu()
+                    img2 = x_t_1_hat[i].squeeze().cpu()
+                    img3 = x_t_1[i].squeeze().cpu()
+                    img4 = x0_hat[i].squeeze().cpu()
+                    img5 = x0[i].squeeze().cpu()
+                    img6 = xT[i].squeeze().cpu()
 
-                        vmax = max(torch.max(img1), torch.max(img2), torch.max(img3), torch.max(img4))
+                    # undo flipping
+                    if flip[i][0]:
+                        img1 = torch.flip(img1, dims=[0])
+                        img2 = torch.flip(img2, dims=[0])
+                        img3 = torch.flip(img3, dims=[0])
+                        img4 = torch.flip(img4, dims=[0])
+                        img5 = torch.flip(img5, dims=[0])
+                        img6 = torch.flip(img6, dims=[0])
+                    if flip[i][1]:
+                        img1 = torch.flip(img1, dims=[1])
+                        img2 = torch.flip(img2, dims=[1])
+                        img3 = torch.flip(img3, dims=[1])
+                        img4 = torch.flip(img4, dims=[1])
+                        img5 = torch.flip(img5, dims=[1])
+                        img6 = torch.flip(img6, dims=[1])
 
-                        fig, ax = plt.subplots(2, 3, figsize=(11, 7))
-                        ax[0,0].imshow(img1.detach(), cmap='gray_r', vmin=0, vmax=vmax*VMAX_FRAC)
-                        ax[0,0].set_title('IN: xt')
-                        ax[0,1].imshow(img2.detach(), cmap='gray_r', vmin=0, vmax=vmax*VMAX_FRAC)
-                        ax[0,1].set_title('OUT: x^_t-1')
-                        ax[0,2].imshow(img3.detach(), cmap='gray_r', vmin=0, vmax=vmax*VMAX_FRAC)
-                        ax[0,2].set_title('TARGET: x_t-1')
-                        ax[1,0].imshow(img4.detach(), cmap='gray_r', vmin=0, vmax=vmax*VMAX_FRAC)
-                        ax[1,0].set_title('UNet: x0^')
-                        ax[1,1].imshow(img5.detach(), cmap='gray_r', vmin=0, vmax=vmax*VMAX_FRAC)
-                        ax[1,1].set_title('HD: x0')
-                        ax[1,2].imshow(img6.detach(), cmap='gray_r', vmin=0, vmax=vmax*VMAX_FRAC)
-                        ax[1,2].set_title('LD: xT')
-                        
+                    vmax = np.percentile(np.array([img1.detach(),img2.detach(),img3.detach(),img4.detach(),img5.detach(),img6.detach()]), VMAX_PERCENTILE)
 
-                        path = FIGUREPATH / 'TRAIN' / f'epoch{epoch}' / f'{plane}' / f'{patient}'
-                        path.mkdir(exist_ok=True, parents=True)
-                        fig.suptitle(f'Example train images: epoch {epoch}, batch {current_batch}, patient {patient}, slice: {idx}, \n timestep fraction: {alpha[i]}, dose delta: {delta[i]}, loss: {loss:.4f}')
-                        fig.savefig(str(path  / f'{idx}.png'))
-                        plt.close()
+                    fig, ax = plt.subplots(2, 3, figsize=(11, 7))
+                    ax[0,0].imshow(img1, cmap='gray_r', vmin=0, vmax=vmax)
+                    ax[0,0].set_title('IN: xt')
+                    ax[0,1].imshow(img2.detach(), cmap='gray_r', vmin=0, vmax=vmax)
+                    ax[0,1].set_title('OUT: x^_t-1')
+                    ax[0,2].imshow(img3.detach(), cmap='gray_r', vmin=0, vmax=vmax)
+                    ax[0,2].set_title('TARGET: x_t-1')
+                    ax[1,0].imshow(img4.detach(), cmap='gray_r', vmin=0, vmax=vmax)
+                    ax[1,0].set_title('UNet: x0^')
+                    ax[1,1].imshow(img5.detach(), cmap='gray_r', vmin=0, vmax=vmax)
+                    ax[1,1].set_title('HD: x0')
+                    ax[1,2].imshow(img6.detach(), cmap='gray_r', vmin=0, vmax=vmax)
+                    ax[1,2].set_title('LD: xT')
+                    
+
+                    path = FIGUREPATH / 'TRAIN' / f'epoch{epoch}' / f'{planes[i]}' / f'{patient}'
+                    path.mkdir(exist_ok=True, parents=True)
+                    fig.suptitle(f'Example train images: epoch {epoch}, batch {current_batch}, patient {patient}, slice: {idx}, \n timestep fraction: {alpha[i]}, dose delta: {delta[i]}, loss: {loss:.4f}')
+                    fig.savefig(str(path  / f'{idx}.png'))
+                    plt.close()
 
     elif type == 'val-batch':
         batch_loss = metrics_dict['batch_loss']
@@ -98,6 +114,7 @@ def export_metrics(metrics_dict, type, FIGUREPATH, VMAX_FRAC=0.5):
         patients = batch['Patient']
         planes = batch['Plane']
         slice_idxs = batch['SliceIndex']
+        flip = metrics_dict['flip']
 
         # loss plot
         fig, ax = plt.subplots(1, 1, figsize=(5, 5))
@@ -110,44 +127,59 @@ def export_metrics(metrics_dict, type, FIGUREPATH, VMAX_FRAC=0.5):
 
         # plot slices
         for i, patient in enumerate(patients):
-            for plane in planes:
-                if patient in view_patients:
-                    idx = slice_idxs[i]
+            if patient in view_patients:
+                idx = slice_idxs[i]
 
-                    if int(idx) in list(slices):
-                        # loss
-                        with torch.no_grad():
-                            loss = loss_criterion(x_t_1[i], x_t_1_hat[i])
-                            loss = loss.item()
+                if int(idx) in list(slices):
+                    # loss
+                    with torch.no_grad():
+                        loss = loss_criterion(x_t_1[i], x_t_1_hat[i])
+                        loss = loss.item()
 
-                        img1 = xt[i].squeeze().cpu()
-                        img2 = x_t_1_hat[i].squeeze().cpu()
-                        img3 = x_t_1[i].squeeze().cpu()
-                        img4 = x0_hat[i].squeeze().cpu()
-                        img5 = x0[i].squeeze().cpu()
-                        img6 = xT[i].squeeze().cpu()
+                    img1 = xt[i].squeeze().cpu()
+                    img2 = x_t_1_hat[i].squeeze().cpu()
+                    img3 = x_t_1[i].squeeze().cpu()
+                    img4 = x0_hat[i].squeeze().cpu()
+                    img5 = x0[i].squeeze().cpu()
+                    img6 = xT[i].squeeze().cpu()
 
-                        vmax = max(torch.max(img1), torch.max(img2), torch.max(img3), torch.max(img4))
+                    # undo flipping
+                    if flip[i][0]:
+                        img1 = torch.flip(img1, dims=[0])
+                        img2 = torch.flip(img2, dims=[0])
+                        img3 = torch.flip(img3, dims=[0])
+                        img4 = torch.flip(img4, dims=[0])
+                        img5 = torch.flip(img5, dims=[0])
+                        img6 = torch.flip(img6, dims=[0])
+                    if flip[i][1]:
+                        img1 = torch.flip(img1, dims=[1])
+                        img2 = torch.flip(img2, dims=[1])
+                        img3 = torch.flip(img3, dims=[1])
+                        img4 = torch.flip(img4, dims=[1])
+                        img5 = torch.flip(img5, dims=[1])
+                        img6 = torch.flip(img6, dims=[1])
 
-                        fig, ax = plt.subplots(2, 3, figsize=(11, 7))
-                        ax[0,0].imshow(img1.detach(), cmap='gray_r', vmin=0, vmax=vmax*VMAX_FRAC)
-                        ax[0,0].set_title('IN: xt')
-                        ax[0,1].imshow(img2.detach(), cmap='gray_r', vmin=0, vmax=vmax*VMAX_FRAC)
-                        ax[0,1].set_title('OUT: x^_t-1')
-                        ax[0,2].imshow(img3.detach(), cmap='gray_r', vmin=0, vmax=vmax*VMAX_FRAC)
-                        ax[0,2].set_title('TARGET: x_t-1')
-                        ax[1,0].imshow(img4.detach(), cmap='gray_r', vmin=0, vmax=vmax*VMAX_FRAC)
-                        ax[1,0].set_title('UNet: x0^')
-                        ax[1,1].imshow(img5.detach(), cmap='gray_r', vmin=0, vmax=vmax*VMAX_FRAC)
-                        ax[1,1].set_title('HD: x0')
-                        ax[1,2].imshow(img6.detach(), cmap='gray_r', vmin=0, vmax=vmax*VMAX_FRAC)
-                        ax[1,2].set_title('LD: xT')
+                    vmax = np.percentile(np.array([img1.detach(),img2.detach(),img3.detach(),img4.detach(),img5.detach(),img6.detach()]), VMAX_PERCENTILE)
 
-                        path = FIGUREPATH / 'VAL' / f'epoch{epoch}' / f'{plane}' / f'{patient}'
-                        path.mkdir(exist_ok=True, parents=True)
-                        fig.suptitle(f'Example val images: epoch {epoch}, batch {current_batch}, patient {patient}, slice: {idx}, \n timestep fraction: {alpha[i]}, dose delta: {delta[i]}, loss: {loss:.4f}')
-                        fig.savefig(str(path / f'{idx}.png'))
-                        plt.close()
+                    fig, ax = plt.subplots(2, 3, figsize=(11, 7))
+                    ax[0,0].imshow(img1.detach(), cmap='gray_r', vmin=0, vmax=vmax)
+                    ax[0,0].set_title('IN: xt')
+                    ax[0,1].imshow(img2.detach(), cmap='gray_r', vmin=0, vmax=vmax)
+                    ax[0,1].set_title('OUT: x^_t-1')
+                    ax[0,2].imshow(img3.detach(), cmap='gray_r', vmin=0, vmax=vmax)
+                    ax[0,2].set_title('TARGET: x_t-1')
+                    ax[1,0].imshow(img4.detach(), cmap='gray_r', vmin=0, vmax=vmax)
+                    ax[1,0].set_title('UNet: x0^')
+                    ax[1,1].imshow(img5.detach(), cmap='gray_r', vmin=0, vmax=vmax)
+                    ax[1,1].set_title('HD: x0')
+                    ax[1,2].imshow(img6.detach(), cmap='gray_r', vmin=0, vmax=vmax)
+                    ax[1,2].set_title('LD: xT')
+
+                    path = FIGUREPATH / 'VAL' / f'epoch{epoch}' / f'{planes[i]}' / f'{patient}'
+                    path.mkdir(exist_ok=True, parents=True)
+                    fig.suptitle(f'Example val images: epoch {epoch}, batch {current_batch}, patient {patient}, slice: {idx}, \n timestep fraction: {alpha[i]}, dose delta: {delta[i]}, loss: {loss:.4f}')
+                    fig.savefig(str(path / f'{idx}.png'))
+                    plt.close()
 
     elif type == 'epoch-done':
         epoch_val_loss = metrics_dict['epoch_val_loss']

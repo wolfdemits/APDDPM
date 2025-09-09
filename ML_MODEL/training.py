@@ -107,7 +107,7 @@ MAX_EPOCHS = 100
 
 MIXED_PRECISION = False
 
-RANDOM_FLIP = False
+RANDOM_FLIP = True
 
 # in case of local
 if LOCAL: BATCH_SIZE = 4
@@ -239,6 +239,7 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
         batch_idx = torch.arange(BATCH_SIZE)
         xT = trainBatch['Images'][div_idxs,batch_idx].to(device)
         batch_planes = trainBatch['Plane']
+        flip = trainBatch['Flip']
 
         # sample time vector
         t = np.random.randint(1, T+1, size=BATCH_SIZE)
@@ -298,7 +299,8 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
             "pathfrac": t/T,
             "delta": delta,
             "view_slices": VIEW_SLICES,
-            "view_patients": VIEW_PATIENTS_TRAIN
+            "view_patients": VIEW_PATIENTS_TRAIN,
+            'flip': flip,
         }
 
         FIGUREPATH = RESULTPATH / 'FIGURES' / str(NAME_RUN)
@@ -346,6 +348,7 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
         batch_idx = torch.arange(BATCH_SIZE)
         xT = valBatch['Images'][div_idxs,batch_idx].to(device)
         batch_planes = valBatch['Plane']
+        flip = valBatch['Flip']
 
         # sample time vector
         t = np.random.randint(1, T+1, size=BATCH_SIZE)
@@ -357,7 +360,7 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
             'batch_planes': batch_planes,
             'all_planes': planes,
             'patients': TrainList,
-            'random_flip': RANDOM_FLIP,
+            'random_flip': True,
         }
         x_t, x_t_1 = APD.diffuse(t=t, T=T, x0=x0, R=(xT-x0), beta=DIFF_BETA, res_info=res_info) # for now: T constant
 
@@ -387,7 +390,8 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
             "pathfrac": t/T,
             "delta": delta,
             "view_slices": VIEW_SLICES,
-            "view_patients": VIEW_PATIENTS_VAL
+            "view_patients": VIEW_PATIENTS_VAL,
+            'flip': flip,
         }
 
         FIGUREPATH = RESULTPATH / 'FIGURES' / str(NAME_RUN)
@@ -454,6 +458,13 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
 
         runtime_atBestEpoch = total_run_time
 
+        # APD state
+        APD_state = {
+            "DIFF_BETA": DIFF_BETA,
+            "DIFF_T": DIFF_T,
+            "divisions": divisions
+        }
+
         # save checkpoint
         checkpoint = {
             'current_epoch': current_epoch,
@@ -462,7 +473,9 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
             'state_best': state_best,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
-            'scheduler_state_dict': scheduler.state_dict()}
+            'scheduler_state_dict': scheduler.state_dict(),
+            'APD_state': APD_state,
+            }
         
         path = RESULTPATH / 'CHECKPOINTS'
         path.mkdir(exist_ok=True, parents=True)
