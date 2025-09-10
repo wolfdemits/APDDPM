@@ -45,7 +45,6 @@ def diffuse(t, T, x0, R, beta, res_info=None, convergence_verbose=False):
         -----------
         t: torch time tensor: (B,)
             Stop forward process at time point t. (inclusive)
-            ! t cannot contain timsteps 0 or lower !
         T: int
             Amount of total diffusion steps in chain.
         x0: torch image tensor: (B, Width, Height)
@@ -62,8 +61,6 @@ def diffuse(t, T, x0, R, beta, res_info=None, convergence_verbose=False):
         xt: torch image tensor: (B, Width, Height)
             Requested image at time vector t after forward diffusion. 
         """
-
-        # TODO - make more memory efficient eg: stop at time vector
 
         device = x0.device
         # batch size
@@ -91,23 +88,19 @@ def diffuse(t, T, x0, R, beta, res_info=None, convergence_verbose=False):
 
         # sample epsilon: (T, B, 300, 300) (T=time) -> N samples = T*B
         # Note epsilons are already variance-normalized
-        global resIterator
         if not res_info is None:
-            # use residuals, else use gaussian noise
-            residualSet = APD.ResidualSet(PatientList=res_info['patients'], plane=res_info['plane'], division=res_info['division'], PATH=PATH, RandomFlip=True)
-            sampler = torch.utils.data.RandomSampler(residualSet, replacement=True, num_samples=10**9) # very high num_samples -> 'infinite', doesn't take up memory
-            resLoader = torch.utils.data.DataLoader(residualSet, sampler=sampler, batch_size=B, drop_last=True)
-            resIterator = iter(resLoader)
+            mrds = APD.MultiResidualDataSet(res_info=res_info, BATCH_SIZE=B, PATH=PATH)
+            mrdl = iter(torch.utils.data.DataLoader(mrds, batch_size=None, collate_fn=APD.CollateFn2D()))
 
         # 1 diffusion step
         def step(xt_1, t):
-            global resIterator
-            if resIterator is None:
+            if res_info is None:
                 # gaussian if no resloader created
                 epsilon = torch.normal(0,1, size=xt_1.shape).to(device)
 
             else:
-                epsilon = next(resIterator)['Residual'].to(device)
+                batch = next(mrdl)
+                epsilon = batch['Residual'].to(device)
 
             # pad noise according to image to allow addition of noise
             W, H = xt_1.shape[1], xt_1.shape[2]
@@ -122,6 +115,11 @@ def diffuse(t, T, x0, R, beta, res_info=None, convergence_verbose=False):
         # run whole chain
         for i in range(T):
             images[i+1,:,:,:] = step(xt_1=images[i,:,:,:], t=i+1)
+        
+        # cleanup
+        if not res_info is None:
+            del mrds
+            del mrdl
 
         return images
 
@@ -147,6 +145,9 @@ TrainSet = APD.Dataset(
 TrainLoader = torch.utils.data.DataLoader(TrainSet, batch_size=B, collate_fn=APD.CollateFn2D(), shuffle=True)
 # -> batch output shape: (T, B, Width, Height), T=time (divisions), B=Batch
 
+# amount of samples
+N = 20
+
 # inputs
 if LOCAL:
     T = 20
@@ -157,14 +158,11 @@ beta = np.sqrt(0.005)
 
 divisions = [1, 5, 10, 20]
 # sample division vector
-div_idxs = np.random.randint(0, len(divisions) - 1, size=B)
+div_idxs = np.random.randint(0, len(divisions) - 1, size=N)
 # for now: all div 20 TODO: make dynamic
 div_idxs = np.ones_like(div_idxs) * 3
 
 print(bcolors.OKCYAN + f'Target endpoint standard deviation (beta**2): {beta**2}' + bcolors.ENDC)
-
-# amount of samples
-N = 20
 
 # training batch
 trainBatch = next(iter(TrainLoader))
@@ -181,15 +179,17 @@ else:
 x0 = trainBatch['Images'][0].expand(N, -1, -1).to(device)
 batch_idx = torch.arange(B)
 xT = trainBatch['Images'][div_idxs ,batch_idx].expand(N, -1, -1).to(device)
+batch_planes = np.repeat(trainBatch['Plane'], N, axis=0)
 
 
 # get x_t and x_t_1 ready
 res_info = {
-    # 'division_idxs': div_idxs,
-    # 'all_divisions': divisions,
-    'division': divisions[div_idxs[0]], # TODO: for now same div
-    'plane': 'Coronal', # for now, coronal only
+    'division_idxs': div_idxs,
+    'all_divisions': divisions,
+    'batch_planes': batch_planes,
+    'all_planes': ["Coronal"],
     'patients': TrainList,
+    'random_flip': True,
 }
 images = diffuse(t=t, T=T, x0=x0, R=(xT-x0), beta=beta, convergence_verbose=True, res_info=res_info)
 

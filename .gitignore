@@ -18,3 +18,5 @@ RESIDUALS-test
 RESIDUALS-full-std
 RESIDUALS-mean-std
 RESULTS
+ML_MODEL/training_GAUSS.py
+INFERENCE/inference_animation_GAUSS.py

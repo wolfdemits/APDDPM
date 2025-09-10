@@ -108,8 +108,9 @@ class APD:
             images[i+1,:,:,:] = step(xt_1=images[i,:,:,:], t=i+1)
         
         # cleanup
-        del mrds
-        del mrdl
+        if not res_info is None:
+            del mrds
+            del mrdl
 
         # output tensor
         x_t = torch.zeros((B, x0.shape[1], x0.shape[2])).to(device)
@@ -186,6 +187,8 @@ class APD:
                 if self.rng.random() > 0.5: # horizontal flip
                     flip = (flip[0], 1)
                     images = torch.flip(images, dims=[2])
+            else:
+                flip = (0,0)
 
             item = {'Images': images, 'Divisions': self.divisions, 'Patient': patient, 'Plane': plane, 'SliceIndex': slice_idx, 'Flip': flip}
 

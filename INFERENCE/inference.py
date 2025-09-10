@@ -10,7 +10,7 @@ from ML_MODEL.APD import APD
 
 ### QUICK SETUP ############################################################################
 LOCAL = True
-CHECKPOINT = 'APDDPM_2025-09-09_17-00-57'
+CHECKPOINT = 'APDDPM_2025-09-10_12-10-08'
 
 PATIENT = 'r001'
 PLANE = 'Coronal'
@@ -173,12 +173,14 @@ delta = 1/np.array(divisions)[div_idxs]
 T = DIFF_T
 
 # TEMP
-T = 10
+T = 100
 
 # loss
 loss_criterion = torch.nn.MSELoss()
 
 loss_arr = []
+img_arr = []
+t_arr = []
 
 res_info = {
     'division_idxs': div_idxs,
@@ -192,17 +194,18 @@ res_info = {
 x_t = xT
 
 with torch.no_grad():
-    for t in reversed(range(1,T)):
-        print(t, flush=True)
-        
+    for t in reversed(range(1,30)):
         img_arr.append(x_t)
         t_arr.append(t)
         # Loss
         loss = loss_criterion(x0, x_t.squeeze(1))
         loss_arr.append(loss.item())
 
+        print(t, flush=True)
+        print(loss, flush=True)
+
         x0_hat = model(x_t.unsqueeze(1), torch.as_tensor(np.array([t])/T).to(device), torch.as_tensor(delta).to(device))
-        x_t_1_hat, _ = APD.diffuse(t=np.array([t])-1, T=T, x0=x0_hat.squeeze(1), R=(xT-x0_hat.squeeze(1)), beta=DIFF_BETA, res_info=res_info)
+        x_t_1_hat, _ = APD.diffuse(t=np.array([t])-1, T=T, x0=x0_hat.squeeze(1), R=(xT-x0_hat.squeeze(1)), beta=DIFF_BETA, res_info=None)
 
         if loss.item() <= min(loss_arr):
             x_best = x_t_1_hat
