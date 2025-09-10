@@ -18,6 +18,14 @@ Imaging.
                     |_ [idx]
             |_ info.json
     |_ data.json
+|_ RESIDUALS
+    |_ PATIENTS
+        |_ [ID]
+            |_ [PLANE]
+                |_ div[x]
+                    |_ [idx]
+            |_ info.json
+    |_ data.json
 |_ PREPROCESSING
     |_ datamanager.py
     |_ convert-to-zarr.py
@@ -29,6 +37,9 @@ Imaging.
     |_ training.py
     |_ helperfunctions.py
     |_ embedding.py
+|_ INFERENCE
+    |_ 1timestep.py
+    |_ inference.py
 |_ VISUALIZATION
     |_ visualizer.py (uses ./PREPROCESSING/datamanager.py)
     |_ plotting_functions.py
@@ -36,15 +47,6 @@ Imaging.
 |_ ANALYSIS
     |_ sphericalVOI_analysis.py
     |_ circularROI_analysis.py
-|_ RESIDUALS
-    |_ PATIENTS
-        |_ [ID]
-            |_ [PLANE]
-                |_ div[x]
-                    |_ [idx]
-            |_ info.json
-    |_ data.json
-    |_ residualstats.json???
 |_ RESULTS
     |_ CHECKPOINTS
     |_ FIGURES

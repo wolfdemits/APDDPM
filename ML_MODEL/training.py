@@ -465,6 +465,33 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
             "divisions": divisions
         }
 
+        # Network hyperparameters
+        network_hyperparam = {
+            "dim": dim,
+            "num_in_channels": num_in_channels,
+            "features_main": features_main,
+            "features_skip": features_skip,
+            "conv_kernel_size": conv_kernel_size,
+            "dilation": dilation,
+            "down_mode": down_mode,
+            "up_mode": up_mode,
+            "normalization": normalization,
+            "activation": activation,
+            "attenGate": attenGate,
+            "residual_connection": residual_connection,
+            "time_embed_dim": time_embed_dim,
+        }
+
+        # training hyperparam
+        training_hyperparam = {
+            "BATCH_SIZE": BATCH_SIZE,
+            "LEARN_RATE": LEARN_RATE,
+            "DECAY": DECAY,
+            "MAX_EPOCHS": MAX_EPOCHS,
+            "MIXED_PRECISION": MIXED_PRECISION,
+            "RANDOM_FLIP": RANDOM_FLIP,
+        }
+
         # save checkpoint
         checkpoint = {
             'current_epoch': current_epoch,
@@ -475,7 +502,9 @@ for current_epoch in range(start_epoch, MAX_EPOCHS):
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
             'APD_state': APD_state,
-            }
+            'network_hyperparam': network_hyperparam,
+            'training_hyperparam': training_hyperparam,
+        }
         
         path = RESULTPATH / 'CHECKPOINTS'
         path.mkdir(exist_ok=True, parents=True)

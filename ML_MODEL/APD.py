@@ -36,7 +36,6 @@ class APD:
         -----------
         t: torch time tensor: (B,)
             Stop forward process at time point t. (inclusive)
-            ! t cannot contain timsteps 0 or lower !
         T: int
             Amount of total diffusion steps in chain.
         x0: torch image tensor: (B, Width, Height)
@@ -53,8 +52,6 @@ class APD:
         xt: torch image tensor: (B, Width, Height)
             Requested image at time vector t after forward diffusion. 
         """
-
-        # TODO - make more memory efficient eg: stop at time vector
 
         device = x0.device
         # batch size
@@ -109,6 +106,10 @@ class APD:
         # run whole chain
         for i in range(T):
             images[i+1,:,:,:] = step(xt_1=images[i,:,:,:], t=i+1)
+        
+        # cleanup
+        del mrds
+        del mrdl
 
         # output tensor
         x_t = torch.zeros((B, x0.shape[1], x0.shape[2])).to(device)
