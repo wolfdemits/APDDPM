@@ -4,6 +4,7 @@ import pathlib
 import json
 import numpy as np
 import zarr
+from matplotlib import animation
 
 from ML_MODEL.UNet import UNet
 from ML_MODEL.APD import APD
@@ -179,6 +180,8 @@ T = 10
 loss_criterion = torch.nn.MSELoss()
 
 loss_arr = []
+img_arr = []
+t_arr = []
 
 res_info = {
     'division_idxs': div_idxs,
@@ -216,7 +219,6 @@ t_arr.append(0)
 # Loss
 loss = loss_criterion(x0, x_t.squeeze(1))
 loss_arr.append(loss.item())
-
 
 ## plot ##
 VMAX_PERCENTILE = 99
@@ -260,25 +262,42 @@ else:
     print(bcolors.OKGREEN + f'Succesfully saved result to {str(path  / f"{PATIENT}_{PLANE}_{SLICE_IDX}_{delta[0]}_I{T}_loss.png")}' + bcolors.ENDC, flush=True)
     plt.close()
 
-# best image
-vmax = np.percentile(np.array([x0.detach(),xT.detach(),x_best.detach()]), VMAX_PERCENTILE)
-
+# animation
 fig, ax = plt.subplots(1, 3, figsize=(10, 8))
-ax[0].imshow(xT.detach(), cmap='gray_r', vmin=0, vmax=vmax)
-ax[0].set_title('IN: Low Dose')
-ax[1].imshow(x_best.detach(), cmap='gray_r', vmin=0, vmax=vmax)
-ax[1].set_title('OUT')
-ax[2].imshow(x0.detach(), cmap='gray_r', vmin=0, vmax=vmax)
-ax[2].set_title('TARGET: High Dose')
-fig.suptitle(f'Patient {PATIENT}, slice: {SLICE_IDX}, \n, dose delta: {delta[0]}, loss: {loss_best:.4f}')
+
+def update_plot(i):
+    xt = img_arr[i].squeeze().cpu()
+    vmax = np.percentile(np.array([x0.detach(),xT.detach(),xt.detach()]), VMAX_PERCENTILE)
+
+    ax[0].clear()
+    ax[1].clear()
+    ax[2].clear()
+    ax[0].imshow(xT.detach(), cmap='gray_r', vmin=0, vmax=vmax)
+    ax[0].set_title('IN: Low Dose')
+    ax[1].imshow(xt.detach(), cmap='gray_r', vmin=0, vmax=vmax)
+    ax[1].set_title('OUT')
+    ax[2].imshow(x0.detach(), cmap='gray_r', vmin=0, vmax=vmax)
+    ax[2].set_title('TARGET: High Dose')
+    fig.suptitle(f'Patient {PATIENT}, slice: {SLICE_IDX}, \n, dose delta: {delta[0]}, loss: {loss_arr[i]:.4f}, t: {t_arr[i]}')
+
+    return
+
+ani = animation.FuncAnimation(fig=fig, func=update_plot, frames=len(img_arr), interval=500, blit = False, repeat=True)
 
 if LOCAL:
     plt.show()
+    path = PATH / 'RESULTS' / 'INFERENCE'
+    path.mkdir(exist_ok=True, parents=True)
+    ani.save(str(path  / f"{PATIENT}_{PLANE}_{SLICE_IDX}_{delta[0]}_I{T}_anim.mp4"))
+    plt.close()
+
+    print(bcolors.OKGREEN + f'Succesfully written to: {str(path  / f"{PATIENT}_{PLANE}_{SLICE_IDX}_{delta[0]}_I{T}_anim.mp4")}' + bcolors.ENDC, flush=True)
 else:
     path = PATH / 'RESULTS' / 'INFERENCE'
     path.mkdir(exist_ok=True, parents=True)
-    fig.savefig(str(path  / f"{PATIENT}_{PLANE}_{SLICE_IDX}_{delta[0]}_I{T}_full_chain_best.png"))
-    print(bcolors.OKGREEN + f'Succesfully saved result to {str(path  / f"{PATIENT}_{PLANE}_{SLICE_IDX}_{delta[0]}_I{T}_full_chain_best.png")}' + bcolors.ENDC, flush=True)
+    ani.save(str(path  / f"{PATIENT}_{PLANE}_{SLICE_IDX}_{delta[0]}_I{T}_anim.mp4"))
     plt.close()
+
+    print(bcolors.OKGREEN + f'Succesfully written to: {str(path  / f"{PATIENT}_{PLANE}_{SLICE_IDX}_{delta[0]}_I{T}_anim.mp4")}' + bcolors.ENDC, flush=True)
 
 ####################################################################################
